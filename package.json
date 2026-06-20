@@ -1,0 +1,30 @@
+{
+  "name": "spendwise",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SpendWise - Smart Expense Tracker monorepo",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "server:start": "npm start --workspace=server",
+    "server:dev": "npm run dev --workspace=server",
+    "server:test": "npm test --workspace=server",
+    "client:start": "npm start --workspace=client",
+    "client:android": "npm run android --workspace=client",
+    "client:ios": "npm run ios --workspace=client",
+    "client:web": "npm run web --workspace=client"
+  },
+  "author": "Sherwin Cari",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SherwinCari/SpendWise.git"
+  },
+  "dependencies": {
+    "@babel/types": "^8.0.0",
+    "browserslist": "^4.28.2",
+    "caniuse-lite": "^1.0.30001799"
+  }
+}

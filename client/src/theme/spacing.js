@@ -1,0 +1,13 @@
+/**
+ * SpendWise Spacing
+ * 4px base unit scale for consistent layout spacing.
+ */
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  base: 16,
+  lg: 24,
+  xl: 32,
+};
