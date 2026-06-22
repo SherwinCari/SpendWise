@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as authApi from '../api/authApi';
 import {
   setTokens,
@@ -9,6 +10,7 @@ import {
 } from '../api/client';
 
 const AuthContext = createContext(null);
+const USER_STORAGE_KEY = '@spendwise_user';
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -25,7 +27,8 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   // Handle forced logout when session expires (refresh token invalid)
-  const handleSessionExpired = useCallback(() => {
+  const handleSessionExpired = useCallback(async () => {
+    await AsyncStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);
     setIsAuthenticated(false);
   }, []);
@@ -41,8 +44,12 @@ export function AuthProvider({ children }) {
       try {
         const token = await getAccessToken();
         if (token) {
+          // Restore user data from AsyncStorage
+          const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
+          if (storedUser) {
+            setUser(JSON.parse(storedUser));
+          }
           setIsAuthenticated(true);
-          // User details will be populated on next API call or we keep minimal state
         }
       } catch {
         // Token check failed — user stays unauthenticated
@@ -60,6 +67,8 @@ export function AuthProvider({ children }) {
       const response = await authApi.login(email, password);
       const { accessToken, refreshToken, user: userData } = response.data;
       await setTokens(accessToken, refreshToken);
+      // Persist user data for app restart
+      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
       setUser(userData);
       setIsAuthenticated(true);
       return userData;
@@ -80,6 +89,8 @@ export function AuthProvider({ children }) {
       const response = await authApi.register(name, email, password);
       const { accessToken, refreshToken, user: userData } = response.data;
       await setTokens(accessToken, refreshToken);
+      // Persist user data for app restart
+      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
       setUser(userData);
       setIsAuthenticated(true);
       return userData;
@@ -105,8 +116,29 @@ export function AuthProvider({ children }) {
       // Logout API call may fail — still clear local state
     } finally {
       await clearTokens();
+      await AsyncStorage.removeItem(USER_STORAGE_KEY);
       setUser(null);
       setIsAuthenticated(false);
+      setLoading(false);
+    }
+  }, []);
+
+  const deleteAccount = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await authApi.deleteAccount();
+      // Clear local state after successful deletion request
+      await clearTokens();
+      await AsyncStorage.removeItem(USER_STORAGE_KEY);
+      setUser(null);
+      setIsAuthenticated(false);
+    } catch (err) {
+      const message =
+        err.response?.data?.error?.message || 'Failed to delete account. Please try again.';
+      setError(message);
+      throw err;
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -123,6 +155,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    deleteAccount,
     clearError,
   };
 

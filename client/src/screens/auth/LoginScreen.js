@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,22 +7,81 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 
+// Required for Google auth session to work properly
+WebBrowser.maybeCompleteAuthSession();
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen({ navigation }) {
-  const { colors, spacing, typography, fontSize, fontWeight } = useTheme();
-  const { login, loading, error: authError, clearError } = useAuth();
+  const { colors, spacing, fontSize, fontWeight } = useTheme();
+  const { login, register, loading, clearError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [serverError, setServerError] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Google OAuth configuration
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  });
+
+  // Handle Google OAuth response
+  useEffect(() => {
+    if (response?.type === 'success') {
+      handleGoogleLogin(response.authentication?.accessToken);
+    }
+  }, [response]);
+
+  const handleGoogleLogin = async (googleAccessToken) => {
+    if (!googleAccessToken) return;
+    setGoogleLoading(true);
+    setServerError('');
+    try {
+      // Fetch user info from Google
+      const userInfoResponse = await fetch('https://www.googleapis.com/userinfo/v2/me', {
+        headers: { Authorization: `Bearer ${googleAccessToken}` },
+      });
+      const googleUser = await userInfoResponse.json();
+
+      // Try to log in with Google email — if user doesn't exist, register them
+      try {
+        await login(googleUser.email, `google_oauth_${googleUser.id}`);
+      } catch {
+        // User doesn't exist yet — register them with Google info
+        try {
+          await register(
+            googleUser.name || googleUser.email.split('@')[0],
+            googleUser.email,
+            `google_oauth_${googleUser.id}`
+          );
+        } catch (regErr) {
+          // If duplicate email, the user exists but with a different password — try login error
+          const message = regErr.response?.data?.error?.message || 'Google login failed';
+          if (message.includes('already exists')) {
+            setServerError('This email is already registered. Please use email/password to login.');
+          } else {
+            setServerError(message);
+          }
+        }
+      }
+    } catch (err) {
+      setServerError('Google login failed. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const validate = useCallback(() => {
     const errors = {};
@@ -158,6 +217,40 @@ export default function LoginScreen({ navigation }) {
             disabled={loading}
             style={{ marginTop: spacing.md }}
           />
+
+          {/* OR Divider */}
+          <View style={[styles.orDivider, { marginTop: spacing.lg }]}>
+            <View style={[styles.orLine, { backgroundColor: colors.textSecondary + '30' }]} />
+            <Text style={[styles.orText, { color: colors.textSecondary, fontSize: fontSize.sm }]}>
+              or
+            </Text>
+            <View style={[styles.orLine, { backgroundColor: colors.textSecondary + '30' }]} />
+          </View>
+
+          {/* Google Button */}
+          <TouchableOpacity
+            style={[
+              styles.googleButton,
+              {
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: colors.textSecondary + '40',
+                backgroundColor: colors.card,
+                marginTop: spacing.lg,
+                paddingVertical: 14,
+              },
+            ]}
+            onPress={() => promptAsync()}
+            disabled={!request || googleLoading || loading}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Google"
+          >
+            <Text style={[styles.googleIcon]}>G</Text>
+            <Text style={[styles.googleText, { color: colors.textPrimary }]}>
+              {googleLoading ? 'Signing in...' : 'Continue with Google'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Register Link */}
@@ -175,6 +268,29 @@ export default function LoginScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Privacy Policy Link */}
+        <TouchableOpacity
+          style={[styles.privacyLink, { marginTop: spacing.md }]}
+          onPress={() => {
+            import('expo-web-browser').then((WebBrowser) => {
+              // Opens in-app browser or you can navigate to a screen
+            });
+            // For now, show an alert with key points
+            Alert.alert(
+              'Privacy Policy',
+              'SpendWise respects your privacy. We only collect data needed to provide the service (email, financial records). We never sell your data to third parties. Your passwords are encrypted and all communication uses HTTPS.\n\nFull policy available in Settings → Privacy Policy.',
+              [{ text: 'OK' }]
+            );
+          }}
+          accessibilityRole="link"
+          accessibilityLabel="View privacy policy"
+        >
+          <Text style={[styles.privacyText, { color: colors.textSecondary, fontSize: fontSize.xs }]}>
+            By continuing, you agree to our{' '}
+            <Text style={{ color: colors.primary }}>Privacy Policy</Text>
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -231,5 +347,38 @@ const styles = StyleSheet.create({
   registerLink: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+  },
+  orText: {
+    marginHorizontal: 12,
+    fontWeight: '500',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleIcon: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#4285F4',
+    marginRight: 10,
+  },
+  googleText: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  privacyLink: {
+    alignItems: 'center',
+  },
+  privacyText: {
+    textAlign: 'center',
   },
 });

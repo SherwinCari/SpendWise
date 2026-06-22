@@ -16,8 +16,10 @@ import {
   Switch,
   ScrollView,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import Constants from 'expo-constants';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/common/Card';
@@ -26,7 +28,8 @@ import Avatar from '../../components/common/Avatar';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme, spacing, typography } = useTheme();
-  const { user, logout, loading } = useAuth();
+  const { user, logout, deleteAccount, loading } = useAuth();
+  const navigation = useNavigation();
 
   const appVersion =
     Constants.expoConfig?.version || Constants.manifest?.version || '1.0.0';
@@ -42,6 +45,32 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await logout();
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? Your data will be permanently removed after 30 days. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAccount();
+              Alert.alert(
+                'Account Deleted',
+                'Your account has been scheduled for deletion. It will be permanently removed in 30 days.'
+              );
+            } catch {
+              Alert.alert('Error', 'Failed to delete account. Please try again.');
+            }
           },
         },
       ],
@@ -132,6 +161,27 @@ export default function SettingsScreen() {
         />
       </Card>
 
+      {/* Danger Zone */}
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: colors.expense, marginTop: spacing.lg },
+        ]}
+      >
+        Danger Zone
+      </Text>
+      <Card style={styles.section}>
+        <Text style={[{ color: colors.textSecondary, fontSize: 13, marginBottom: spacing.sm }]}>
+          Permanently delete your account and all data. This will take effect after 30 days.
+        </Text>
+        <Button
+          title="Delete Account"
+          variant="danger"
+          onPress={handleDeleteAccount}
+          loading={loading}
+        />
+      </Card>
+
       {/* App Info Section */}
       <Text
         style={[
@@ -158,6 +208,17 @@ export default function SettingsScreen() {
             SpendWise
           </Text>
         </View>
+        <TouchableOpacity
+          style={[styles.infoRow, { marginTop: spacing.md }]}
+          onPress={() => navigation.navigate('PrivacyPolicy')}
+          accessibilityRole="link"
+          accessibilityLabel="View Privacy Policy"
+        >
+          <Text style={[styles.infoLabel, { color: colors.primary }]}>
+            Privacy Policy
+          </Text>
+          <Text style={[{ color: colors.primary, fontSize: 16 }]}>›</Text>
+        </TouchableOpacity>
       </Card>
     </ScrollView>
   );

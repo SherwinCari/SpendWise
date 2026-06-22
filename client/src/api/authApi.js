@@ -38,3 +38,12 @@ export const refresh = (refreshToken) => {
 export const logout = (refreshToken) => {
   return apiClient.post('/auth/logout', { refreshToken });
 };
+
+/**
+ * Delete (soft-delete) the authenticated user's account.
+ * Account will be permanently removed after 30 days.
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export const deleteAccount = () => {
+  return apiClient.delete('/auth/account');
+};

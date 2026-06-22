@@ -5,6 +5,7 @@ import AnalyticsScreen from '../screens/more/AnalyticsScreen';
 import NotificationsScreen from '../screens/more/NotificationsScreen';
 import CategoriesScreen from '../screens/more/CategoriesScreen';
 import SettingsScreen from '../screens/more/SettingsScreen';
+import PrivacyPolicyScreen from '../screens/more/PrivacyPolicyScreen';
 import { useTheme } from '../theme/ThemeContext';
 
 const Stack = createStackNavigator();
@@ -46,6 +47,11 @@ export default function MoreStack() {
         name="Settings"
         component={SettingsScreen}
         options={{ title: 'Settings' }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ title: 'Privacy Policy' }}
       />
     </Stack.Navigator>
   );

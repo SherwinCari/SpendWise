@@ -29,12 +29,19 @@
     "plugins": [
       "expo-font",
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
         "projectId": "2a5588a2-9126-48d2-9a7d-a6f488746239"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2a5588a2-9126-48d2-9a7d-a6f488746239"
     }
   }
 }
