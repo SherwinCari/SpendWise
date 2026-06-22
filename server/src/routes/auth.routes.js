@@ -112,4 +112,24 @@ router.post('/logout', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * DELETE /api/auth/account
+ * Soft-delete the authenticated user's account.
+ * Sets deleted_at timestamp — account will be permanently removed after 30 days.
+ * Requires authentication.
+ */
+router.delete('/account', authenticate, async (req, res, next) => {
+  try {
+    const result = await authService.deleteAccount(req.userId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      deletedAt: result.deletedAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

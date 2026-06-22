@@ -26,5 +26,8 @@
     "@babel/types": "^8.0.0",
     "browserslist": "^4.28.2",
     "caniuse-lite": "^1.0.30001799"
+  },
+  "overrides": {
+    "react-native-gesture-handler": "~2.28.0"
   }
 }

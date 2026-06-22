@@ -67,6 +67,11 @@ async function login(email, password) {
     throw new AuthenticationError('Invalid credentials');
   }
 
+  // Check if account is deleted
+  if (user.deleted_at) {
+    throw new AuthenticationError('This account has been deleted');
+  }
+
   // Compare password with stored hash
   const isValid = await bcrypt.compare(password, user.password_hash);
   if (!isValid) {
@@ -155,6 +160,34 @@ async function logout(refreshToken) {
 }
 
 /**
+ * Soft-delete a user account by setting deleted_at timestamp.
+ * The account will be permanently deleted after 30 days.
+ * Also invalidates all sessions for the user.
+ *
+ * @param {string} userId - The user's UUID
+ * @returns {Promise<{message: string, deletedAt: string}>}
+ */
+async function deleteAccount(userId) {
+  // Set deleted_at to now
+  const result = await query(
+    `UPDATE users SET deleted_at = NOW() WHERE id = $1 RETURNING deleted_at`,
+    [userId]
+  );
+
+  if (!result.rows[0]) {
+    throw new AuthenticationError('User not found');
+  }
+
+  // Invalidate all sessions for this user
+  await query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+
+  return {
+    message: 'Account scheduled for deletion. It will be permanently removed in 30 days.',
+    deletedAt: result.rows[0].deleted_at,
+  };
+}
+
+/**
  * Create a session record with a refresh token and expiration.
  * Internal helper — computes expires_at as 7 days from now.
  *
@@ -181,4 +214,5 @@ module.exports = {
   login,
   refreshToken: refreshTokenFn,
   logout,
+  deleteAccount,
 };
