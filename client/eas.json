@@ -16,8 +16,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://spendwise-z51k.onrender.com/api",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "YOUR_GOOGLE_WEB_CLIENT_ID_HERE",
-        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "YOUR_GOOGLE_ANDROID_CLIENT_ID_HERE"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "139704642457-q5afpfc9and3ac0888lte3ae04g2lhi4.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "139704642457-q5afpfc9and3ac0888lte3ae04g2lhi4.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -28,8 +28,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://spendwise-z51k.onrender.com/api",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "YOUR_GOOGLE_WEB_CLIENT_ID_HERE",
-        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "YOUR_GOOGLE_ANDROID_CLIENT_ID_HERE"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "139704642457-q5afpfc9and3ac0888lte3ae04g2lhi4.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "139704642457-q5afpfc9and3ac0888lte3ae04g2lhi4.apps.googleusercontent.com"
       }
     }
   },
