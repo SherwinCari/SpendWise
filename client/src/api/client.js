@@ -186,4 +186,5 @@ export const getRefreshToken = async () => {
   return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
 };
 
+export { apiClient };
 export default apiClient;

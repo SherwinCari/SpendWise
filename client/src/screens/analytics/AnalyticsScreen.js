@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   Dimensions,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { PieChart, LineChart } from 'react-native-chart-kit';
 import { useTheme } from '../../theme/ThemeContext';
@@ -21,6 +22,7 @@ import Card from '../../components/common/Card';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
 import { getMonthlySummary, getCategoryBreakdown, getSpendingTrends } from '../../api/analyticsApi';
+import { apiClient } from '../../api/client';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CHART_WIDTH = SCREEN_WIDTH - 48; // 24px padding on each side
@@ -410,6 +412,25 @@ export default function AnalyticsScreen() {
           </Card>
         )}
       </View>
+
+      {/* Generate Monthly Report (Feature #24) */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={[styles.reportButton, { backgroundColor: colors.primary, borderRadius: 8 }]}
+          onPress={async () => {
+            try {
+              const response = await apiClient.post('/notifications/monthly-summary');
+              Alert.alert('Report Generated', response.data?.data?.message || 'Monthly summary notification created!');
+            } catch (err) {
+              Alert.alert('Error', err.response?.data?.error?.message || 'Failed to generate report.');
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Generate Monthly Report"
+        >
+          <Text style={styles.reportButtonText}>📊 Generate Monthly Report</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -501,5 +522,15 @@ const styles = StyleSheet.create({
   chartCard: {
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  reportButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

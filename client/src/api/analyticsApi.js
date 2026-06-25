@@ -31,3 +31,11 @@ export const getCategoryBreakdown = (startDate, endDate) => {
 export const getSpendingTrends = () => {
   return apiClient.get('/analytics/trends');
 };
+
+/**
+ * Get AI-powered insights (Feature #26).
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export const getInsights = () => {
+  return apiClient.get('/analytics/insights');
+};

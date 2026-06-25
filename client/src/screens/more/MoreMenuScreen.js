@@ -34,6 +34,24 @@ const MENU_ITEMS = [
     description: 'View reports and spending trends',
   },
   {
+    key: 'RecurringTransactions',
+    icon: 'refresh',
+    label: 'Recurring',
+    description: 'Manage recurring transactions',
+  },
+  {
+    key: 'BillReminders',
+    icon: 'bell-ring-outline',
+    label: 'Bill Reminders',
+    description: 'Track upcoming bills and due dates',
+  },
+  {
+    key: 'SavingsGoals',
+    icon: 'piggy-bank-outline',
+    label: 'Savings Goals',
+    description: 'Set and track savings targets',
+  },
+  {
     key: 'Notifications',
     icon: 'bell-outline',
     label: 'Notifications',
@@ -43,7 +61,7 @@ const MENU_ITEMS = [
     key: 'Settings',
     icon: 'cog-outline',
     label: 'Settings',
-    description: 'Dark mode, account, and app info',
+    description: 'Dark mode, security, and app info',
   },
 ];
 

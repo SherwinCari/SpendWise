@@ -1,5 +1,5 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import TransactionListScreen from '../screens/transactions/TransactionListScreen';
 import TransactionDetailsScreen from '../screens/transactions/TransactionDetailsScreen';
 import AddEditTransactionScreen from '../screens/transactions/AddEditTransactionScreen';
@@ -18,6 +18,7 @@ export default function TransactionStack() {
         headerTitleStyle: { fontWeight: '600' },
         headerShadowVisible: false,
         cardStyle: { backgroundColor: colors.background },
+        ...TransitionPresets.SlideFromRightIOS,
       }}
     >
       <Stack.Screen

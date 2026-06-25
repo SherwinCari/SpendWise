@@ -31,6 +31,7 @@ import Card from '../../components/common/Card';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
 import TransactionCard from '../../components/transactions/TransactionCard';
+import { DashboardSkeleton } from '../../components/common/SkeletonLoader';
 import * as analyticsApi from '../../api/analyticsApi';
 
 export default function DashboardScreen() {
@@ -48,6 +49,7 @@ export default function DashboardScreen() {
     totalIncome: '0',
     totalExpenses: '0',
   });
+  const [insights, setInsights] = useState([]);
 
   // Calculate total balance across all wallets
   const totalBalance = useMemo(() => {
@@ -90,6 +92,16 @@ export default function DashboardScreen() {
     }
   }, []);
 
+  // Fetch AI insights (Feature #26)
+  const fetchInsights = useCallback(async () => {
+    try {
+      const response = await analyticsApi.getInsights();
+      setInsights(response.data?.data || []);
+    } catch {
+      // Silently fail
+    }
+  }, []);
+
   // Initial data load
   useEffect(() => {
     loadData();
@@ -104,6 +116,7 @@ export default function DashboardScreen() {
         fetchBudgets(),
         fetchNotifications(),
         fetchMonthlySummary(),
+        fetchInsights(),
       ]);
     } catch (err) {
       if (err.message === 'Network Error' || !err.response) {
@@ -137,8 +150,8 @@ export default function DashboardScreen() {
 
   if (initialLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
-        <LoadingSpinner message="Loading your dashboard..." />
+      <View style={[styles.container, { backgroundColor: colors.background, flex: 1 }]}>
+        <DashboardSkeleton />
       </View>
     );
   }
@@ -387,6 +400,40 @@ export default function DashboardScreen() {
                   ]}
                 />
               </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* AI Insights (Feature #26) */}
+      {insights.length > 0 && (
+        <View style={[styles.section, { marginTop: spacing.lg }]}>
+          <View style={[styles.sectionHeader, { paddingHorizontal: spacing.base }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: fontSize.lg, fontWeight: fontWeight.semiBold }]}>
+              💡 Insights
+            </Text>
+          </View>
+          {insights.slice(0, 2).map((insight, index) => (
+            <View
+              key={index}
+              style={[
+                {
+                  backgroundColor: colors.card,
+                  borderRadius: borderRadius.card,
+                  marginHorizontal: spacing.base,
+                  marginVertical: spacing.xs,
+                  padding: spacing.md,
+                  ...shadows.card,
+                  borderLeftWidth: 3,
+                  borderLeftColor: insight.severity === 'warning' ? colors.expense
+                    : insight.severity === 'success' ? colors.income
+                    : colors.primary,
+                },
+              ]}
+            >
+              <Text style={[{ color: colors.textPrimary, fontSize: fontSize.sm, lineHeight: 20 }]}>
+                {insight.message}
+              </Text>
             </View>
           ))}
         </View>

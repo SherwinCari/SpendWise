@@ -218,6 +218,18 @@ export default function LoginScreen({ navigation }) {
             style={{ marginTop: spacing.md }}
           />
 
+          {/* Forgot Password Link (Feature #4) */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ForgotPassword')}
+            style={{ marginTop: spacing.md, alignItems: 'center' }}
+            accessibilityRole="link"
+            accessibilityLabel="Forgot Password"
+          >
+            <Text style={[{ color: colors.primary, fontSize: fontSize.sm }]}>
+              Forgot Password?
+            </Text>
+          </TouchableOpacity>
+
           {/* OR Divider */}
           <View style={[styles.orDivider, { marginTop: spacing.lg }]}>
             <View style={[styles.orLine, { backgroundColor: colors.textSecondary + '30' }]} />

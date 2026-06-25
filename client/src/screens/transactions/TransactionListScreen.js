@@ -7,10 +7,14 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../theme';
 import { useTransactions } from '../../context/TransactionContext';
 import { useCategories } from '../../context/CategoryContext';
+import { apiClient } from '../../api/client';
 import TransactionCard from '../../components/transactions/TransactionCard';
 import FilterBar from '../../components/transactions/FilterBar';
 import EmptyState from '../../components/common/EmptyState';
@@ -32,6 +36,33 @@ export default function TransactionListScreen({ navigation }) {
   const [initialLoad, setInitialLoad] = useState(true);
 
   const isFetchingRef = useRef(false);
+
+  // Export CSV (Feature #18)
+  const handleExportCSV = useCallback(async () => {
+    try {
+      const now = new Date();
+      const startDate = filters.startDate || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const endDate = filters.endDate || now.toISOString().split('T')[0];
+
+      const response = await apiClient.get('/transactions/export', {
+        params: { startDate, endDate, format: 'csv' },
+        responseType: 'text',
+      });
+
+      const csv = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+      const fileUri = `${FileSystem.documentDirectory}transactions_${startDate}_${endDate}.csv`;
+      await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export Transactions' });
+      } else {
+        Alert.alert('Exported', `CSV saved to: ${fileUri}`);
+      }
+    } catch (err) {
+      Alert.alert('Export Failed', err.response?.data?.error?.message || 'Could not export transactions.');
+    }
+  }, [filters]);
 
   // Fetch categories on mount for the filter bar
   useEffect(() => {
@@ -161,15 +192,27 @@ export default function TransactionListScreen({ navigation }) {
   }, [initialLoad, loading, filters]);
 
   /**
-   * Render the filter bar header
+   * Render the filter bar header with export button
    */
   const renderHeader = useCallback(() => (
-    <FilterBar
-      filters={filters}
-      onFilterChange={handleFilterChange}
-      categories={allCategories}
-    />
-  ), [filters, handleFilterChange, allCategories]);
+    <View>
+      <View style={styles.headerActions}>
+        <TouchableOpacity
+          style={styles.exportButton}
+          onPress={handleExportCSV}
+          accessibilityRole="button"
+          accessibilityLabel="Export transactions to CSV"
+        >
+          <Icon name="download" size={20} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+      <FilterBar
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        categories={allCategories}
+      />
+    </View>
+  ), [filters, handleFilterChange, allCategories, handleExportCSV, colors.primary]);
 
   // Show full-screen loader on initial load
   if (initialLoad && loading) {
@@ -228,5 +271,14 @@ const styles = StyleSheet.create({
   footer: {
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  exportButton: {
+    padding: 8,
   },
 });

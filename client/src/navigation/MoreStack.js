@@ -1,11 +1,14 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import MoreMenuScreen from '../screens/more/MoreMenuScreen';
 import AnalyticsScreen from '../screens/more/AnalyticsScreen';
 import NotificationsScreen from '../screens/more/NotificationsScreen';
 import CategoriesScreen from '../screens/more/CategoriesScreen';
 import SettingsScreen from '../screens/more/SettingsScreen';
 import PrivacyPolicyScreen from '../screens/more/PrivacyPolicyScreen';
+import RecurringTransactionsScreen from '../screens/more/RecurringTransactionsScreen';
+import BillRemindersScreen from '../screens/more/BillRemindersScreen';
+import SavingsGoalsScreen from '../screens/more/SavingsGoalsScreen';
 import { useTheme } from '../theme/ThemeContext';
 
 const Stack = createStackNavigator();
@@ -21,6 +24,7 @@ export default function MoreStack() {
         headerTitleStyle: { fontWeight: '600' },
         headerShadowVisible: false,
         cardStyle: { backgroundColor: colors.background },
+        ...TransitionPresets.SlideFromRightIOS,
       }}
     >
       <Stack.Screen
@@ -52,6 +56,21 @@ export default function MoreStack() {
         name="PrivacyPolicy"
         component={PrivacyPolicyScreen}
         options={{ title: 'Privacy Policy' }}
+      />
+      <Stack.Screen
+        name="RecurringTransactions"
+        component={RecurringTransactionsScreen}
+        options={{ title: 'Recurring Transactions' }}
+      />
+      <Stack.Screen
+        name="BillReminders"
+        component={BillRemindersScreen}
+        options={{ title: 'Bill Reminders' }}
+      />
+      <Stack.Screen
+        name="SavingsGoals"
+        component={SavingsGoalsScreen}
+        options={{ title: 'Savings Goals' }}
       />
     </Stack.Navigator>
   );

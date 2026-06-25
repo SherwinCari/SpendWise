@@ -1,6 +1,7 @@
 /**
  * SpendWise Settings Screen
  * - Dark mode toggle (persisted via ThemeContext/AsyncStorage)
+ * - Biometric lock toggle (Feature #2)
  * - User profile section (name, email from AuthContext)
  * - Logout button (clears tokens, resets context, navigates to AuthStack)
  * - App version info
@@ -8,7 +9,7 @@
  * Requirements: 2.9, 17.4
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +20,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -26,13 +29,49 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Avatar from '../../components/common/Avatar';
 
+const BIOMETRIC_ENABLED_KEY = '@spendwise_biometric_enabled';
+
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme, spacing, typography } = useTheme();
   const { user, logout, deleteAccount, loading } = useAuth();
   const navigation = useNavigation();
 
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+
   const appVersion =
     Constants.expoConfig?.version || Constants.manifest?.version || '1.0.0';
+
+  // Check biometric availability and current setting
+  useEffect(() => {
+    const checkBiometric = async () => {
+      const compatible = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      setBiometricAvailable(compatible && enrolled);
+
+      const enabled = await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY);
+      setBiometricEnabled(enabled === 'true');
+    };
+    checkBiometric();
+  }, []);
+
+  const handleBiometricToggle = async (value) => {
+    if (value) {
+      // Verify biometric first before enabling
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Verify to enable biometric lock',
+        fallbackLabel: 'Use passcode',
+      });
+
+      if (result.success) {
+        await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true');
+        setBiometricEnabled(true);
+      }
+    } else {
+      await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, 'false');
+      setBiometricEnabled(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -138,6 +177,39 @@ export default function SettingsScreen() {
             trackColor={{ false: '#D1D5DB', true: colors.primary + '80' }}
             thumbColor={isDark ? colors.primary : '#F9FAFB'}
             accessibilityLabel="Toggle dark mode"
+            accessibilityRole="switch"
+          />
+        </View>
+      </Card>
+
+      {/* Security Section (Feature #2) */}
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: colors.textSecondary, marginTop: spacing.lg },
+        ]}
+      >
+        Security
+      </Text>
+      <Card style={styles.section}>
+        <View style={styles.settingRow}>
+          <View style={styles.settingLabel}>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
+              Biometric Lock
+            </Text>
+            <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>
+              {biometricAvailable
+                ? 'Require fingerprint/face to open app'
+                : 'Not available on this device'}
+            </Text>
+          </View>
+          <Switch
+            value={biometricEnabled}
+            onValueChange={handleBiometricToggle}
+            disabled={!biometricAvailable}
+            trackColor={{ false: '#D1D5DB', true: colors.primary + '80' }}
+            thumbColor={biometricEnabled ? colors.primary : '#F9FAFB'}
+            accessibilityLabel="Toggle biometric lock"
             accessibilityRole="switch"
           />
         </View>

@@ -14,6 +14,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { useCategories } from '../../context/CategoryContext';
@@ -65,11 +66,44 @@ function CategoryManagementScreen() {
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [sortOrder, setSortOrder] = useState({}); // Feature #16: local sort order
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
 
-  const currentCategories = categories[activeTab] || [];
+  // Feature #16: Load sort order from AsyncStorage
+  useEffect(() => {
+    const loadSortOrder = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@spendwise_category_sort');
+        if (stored) setSortOrder(JSON.parse(stored));
+      } catch {}
+    };
+    loadSortOrder();
+  }, []);
+
+  // Apply sort order to categories
+  const currentCategories = (categories[activeTab] || []).slice().sort((a, b) => {
+    const orderA = sortOrder[a.id] ?? 999;
+    const orderB = sortOrder[b.id] ?? 999;
+    return orderA - orderB;
+  });
+
+  // Feature #16: Move category up or down
+  const handleMoveCategory = async (index, direction) => {
+    const newList = [...currentCategories];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newList.length) return;
+
+    [newList[index], newList[targetIndex]] = [newList[targetIndex], newList[index]];
+
+    const newSortOrder = { ...sortOrder };
+    newList.forEach((cat, i) => { newSortOrder[cat.id] = i; });
+    setSortOrder(newSortOrder);
+    try {
+      await AsyncStorage.setItem('@spendwise_category_sort', JSON.stringify(newSortOrder));
+    } catch {}
+  };
 
   const resetForm = useCallback(() => {
     setName('');
@@ -148,7 +182,7 @@ function CategoryManagementScreen() {
     }
   };
 
-  const renderCategoryItem = ({ item }) => (
+  const renderCategoryItem = ({ item, index }) => (
     <TouchableOpacity
       style={[
         styles.categoryItem,
@@ -165,6 +199,25 @@ function CategoryManagementScreen() {
       accessibilityLabel={`Edit category ${item.name}`}
     >
       <View style={styles.categoryItemLeft}>
+        {/* Reorder buttons (Feature #16) */}
+        <View style={styles.reorderButtons}>
+          <TouchableOpacity
+            onPress={() => handleMoveCategory(index, 'up')}
+            disabled={index === 0}
+            hitSlop={{ top: 8, bottom: 4, left: 8, right: 8 }}
+            accessibilityLabel={`Move ${item.name} up`}
+          >
+            <Icon name="chevron-up" size={18} color={index === 0 ? colors.textSecondary + '40' : colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleMoveCategory(index, 'down')}
+            disabled={index === currentCategories.length - 1}
+            hitSlop={{ top: 4, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={`Move ${item.name} down`}
+          >
+            <Icon name="chevron-down" size={18} color={index === currentCategories.length - 1 ? colors.textSecondary + '40' : colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
         <View
           style={[
             styles.iconContainer,
@@ -482,6 +535,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  reorderButtons: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   categoryItemRight: {
     flexDirection: 'row',

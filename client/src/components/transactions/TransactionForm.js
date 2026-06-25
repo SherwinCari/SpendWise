@@ -16,9 +16,13 @@ import {
   Platform,
   Modal,
   FlatList,
+  Image,
+  Alert,
 } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { useTheme } from '../../theme';
 
 /**
@@ -52,6 +56,7 @@ export default function TransactionForm({
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showWalletPicker, setShowWalletPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [receiptImage, setReceiptImage] = useState(null);
 
   // Filter categories based on selected type
   const filteredCategories = categories.filter((cat) => cat.type === type);
@@ -106,6 +111,42 @@ export default function TransactionForm({
     if (parts.length <= 2) {
       const formatted = parts.length === 2 ? `${parts[0]}.${parts[1].slice(0, 2)}` : cleaned;
       setAmount(formatted);
+    }
+  }
+
+  // Photo Receipt (Feature #21)
+  async function handlePickReceipt() {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permission Required', 'Please allow access to your photos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      allowsEditing: true,
+    });
+
+    if (!result.canceled && result.assets?.[0]) {
+      setReceiptImage(result.assets[0].uri);
+    }
+  }
+
+  async function handleTakePhoto() {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permission Required', 'Please allow camera access.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.7,
+      allowsEditing: true,
+    });
+
+    if (!result.canceled && result.assets?.[0]) {
+      setReceiptImage(result.assets[0].uri);
     }
   }
 
@@ -283,6 +324,41 @@ export default function TransactionForm({
           textAlignVertical="top"
           accessibilityLabel="Transaction description"
         />
+      </View>
+
+      {/* Receipt Photo (Feature #21) */}
+      <View style={styles.section}>
+        <Text style={[styles.label, { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: fontWeight.medium }]}>
+          Receipt (optional)
+        </Text>
+        <View style={styles.receiptRow}>
+          <TouchableOpacity
+            style={[styles.receiptButton, { borderColor: colors.primary + '60', borderRadius: borderRadius.input, backgroundColor: colors.card }]}
+            onPress={handleTakePhoto}
+            accessibilityRole="button"
+            accessibilityLabel="Take photo of receipt"
+          >
+            <Icon name="camera" size={20} color={colors.primary} />
+            <Text style={[{ color: colors.primary, fontSize: fontSize.xs, marginTop: 4 }]}>Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.receiptButton, { borderColor: colors.primary + '60', borderRadius: borderRadius.input, backgroundColor: colors.card }]}
+            onPress={handlePickReceipt}
+            accessibilityRole="button"
+            accessibilityLabel="Pick receipt from gallery"
+          >
+            <Icon name="image" size={20} color={colors.primary} />
+            <Text style={[{ color: colors.primary, fontSize: fontSize.xs, marginTop: 4 }]}>Gallery</Text>
+          </TouchableOpacity>
+        </View>
+        {receiptImage && (
+          <View style={styles.receiptPreview}>
+            <Image source={{ uri: receiptImage }} style={styles.receiptImage} />
+            <TouchableOpacity onPress={() => setReceiptImage(null)} style={styles.removeReceipt}>
+              <Icon name="close-circle" size={24} color={colors.expense} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Action Buttons */}
@@ -567,4 +643,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {},
+  // Receipt styles (Feature #21)
+  receiptRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  receiptButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  receiptPreview: {
+    marginTop: 12,
+    position: 'relative',
+  },
+  receiptImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    resizeMode: 'cover',
+  },
+  removeReceipt: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
 });

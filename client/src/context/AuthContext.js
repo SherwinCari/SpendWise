@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as authApi from '../api/authApi';
 import {
@@ -11,6 +12,7 @@ import {
 
 const AuthContext = createContext(null);
 const USER_STORAGE_KEY = '@spendwise_user';
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -25,6 +27,58 @@ export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Session timeout (Feature #3)
+  const inactivityTimer = useRef(null);
+  const lastActivity = useRef(Date.now());
+
+  /**
+   * Reset inactivity timer on any user interaction.
+   */
+  const resetInactivityTimer = useCallback(() => {
+    lastActivity.current = Date.now();
+
+    if (inactivityTimer.current) {
+      clearTimeout(inactivityTimer.current);
+    }
+
+    if (isAuthenticated) {
+      inactivityTimer.current = setTimeout(() => {
+        // Auto-logout after 15 minutes of inactivity
+        handleSessionExpired();
+      }, INACTIVITY_TIMEOUT_MS);
+    }
+  }, [isAuthenticated]);
+
+  // Listen for app state changes to check inactivity on foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && isAuthenticated) {
+        const elapsed = Date.now() - lastActivity.current;
+        if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+          handleSessionExpired();
+        } else {
+          resetInactivityTimer();
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isAuthenticated, resetInactivityTimer]);
+
+  // Start/stop inactivity timer based on auth state
+  useEffect(() => {
+    if (isAuthenticated) {
+      resetInactivityTimer();
+    } else {
+      if (inactivityTimer.current) {
+        clearTimeout(inactivityTimer.current);
+      }
+    }
+    return () => {
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    };
+  }, [isAuthenticated]);
 
   // Handle forced logout when session expires (refresh token invalid)
   const handleSessionExpired = useCallback(async () => {
@@ -157,6 +211,7 @@ export function AuthProvider({ children }) {
     logout,
     deleteAccount,
     clearError,
+    resetInactivityTimer,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

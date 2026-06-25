@@ -2,28 +2,25 @@
  * TransactionCard Component
  * Displays a single transaction with colored amount, category icon,
  * description, date, and wallet name.
+ * 
+ * Feature #11: Swipe left to reveal delete button.
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 
 /**
  * @param {object} props
  * @param {object} props.transaction - Transaction data object
- * @param {number|string} props.transaction.amount - Transaction amount
- * @param {'income'|'expense'} props.transaction.type - Transaction type
- * @param {string} [props.transaction.description] - Transaction description
- * @param {string} props.transaction.date - ISO date string
- * @param {string} [props.transaction.categoryName] - Category display name
- * @param {string} [props.transaction.categoryIcon] - MaterialCommunityIcons icon name
- * @param {string} [props.transaction.categoryColor] - Category color hex
- * @param {string} [props.transaction.walletName] - Wallet display name
  * @param {function} [props.onPress] - Called when card is pressed
+ * @param {function} [props.onDelete] - Called when delete is triggered via swipe
  */
-export default function TransactionCard({ transaction, onPress }) {
-  const { colors, spacing, borderRadius, shadows, typography, fontSize, fontWeight } = useTheme();
+export default function TransactionCard({ transaction, onPress, onDelete }) {
+  const { colors, spacing, borderRadius, shadows, fontSize, fontWeight } = useTheme();
+  const swipeableRef = useRef(null);
 
   const {
     amount,
@@ -43,6 +40,33 @@ export default function TransactionCard({ transaction, onPress }) {
   const formattedDate = formatDate(date);
   const iconName = categoryIcon || (isIncome ? 'arrow-down-circle' : 'arrow-up-circle');
   const iconColor = categoryColor || colors.primary;
+
+  const renderRightActions = (progress, dragX) => {
+    if (!onDelete) return null;
+
+    const scale = dragX.interpolate({
+      inputRange: [-80, 0],
+      outputRange: [1, 0.5],
+      extrapolate: 'clamp',
+    });
+
+    return (
+      <TouchableOpacity
+        style={[styles.deleteAction, { backgroundColor: colors.expense, borderRadius: borderRadius.card }]}
+        onPress={() => {
+          if (swipeableRef.current) swipeableRef.current.close();
+          onDelete(transaction);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Delete transaction"
+      >
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <Icon name="delete" size={24} color="#FFFFFF" />
+          <Text style={styles.deleteText}>Delete</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
 
   const content = (
     <View style={[styles.container, { backgroundColor: colors.card, borderRadius: borderRadius.card, ...shadows.card }]}>
@@ -81,15 +105,27 @@ export default function TransactionCard({ transaction, onPress }) {
     </View>
   );
 
-  if (onPress) {
+  const wrappedContent = onPress ? (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${description || categoryName || 'Transaction'}, ${formattedAmount}`}>
+      {content}
+    </TouchableOpacity>
+  ) : content;
+
+  // Only wrap in Swipeable if onDelete is provided
+  if (onDelete) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${description || categoryName || 'Transaction'}, ${formattedAmount}`}>
-        {content}
-      </TouchableOpacity>
+      <Swipeable
+        ref={swipeableRef}
+        renderRightActions={renderRightActions}
+        rightThreshold={40}
+        overshootRight={false}
+      >
+        {wrappedContent}
+      </Swipeable>
     );
   }
 
-  return content;
+  return wrappedContent;
 }
 
 function formatDate(dateString) {
@@ -139,5 +175,18 @@ const styles = StyleSheet.create({
   },
   amount: {
     textAlign: 'right',
+  },
+  deleteAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    marginVertical: 4,
+    marginRight: 16,
+  },
+  deleteText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
 });
