@@ -70,6 +70,54 @@ router.get('/', authenticate, async (req, res, next) => {
 });
 
 /**
+ * GET /api/transactions/export
+ * Export transactions as CSV for a date range.
+ * Query params: format=csv, startDate, endDate
+ * Feature #18
+ * NOTE: Must be defined before /:id to avoid route conflict.
+ */
+router.get('/export', authenticate, async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'startDate and endDate are required' },
+      });
+    }
+
+    const result = await transactionService.list(req.userId, {
+      startDate,
+      endDate,
+      limit: 10000, // Large limit for export
+      page: 1,
+    });
+
+    const transactions = result.transactions;
+
+    // Build CSV
+    const headers = ['Date', 'Type', 'Category', 'Description', 'Amount', 'Wallet'];
+    const rows = transactions.map((t) => [
+      t.date ? new Date(t.date).toISOString().split('T')[0] : '',
+      t.type || '',
+      (t.categoryName || t.category_name || '').replace(/,/g, ' '),
+      (t.description || '').replace(/,/g, ' ').replace(/\n/g, ' '),
+      t.amount || '0',
+      (t.walletName || t.wallet_name || '').replace(/,/g, ' '),
+    ]);
+
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=transactions_${startDate}_${endDate}.csv`);
+    res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/transactions/:id
  * Get a single transaction by ID.
  */

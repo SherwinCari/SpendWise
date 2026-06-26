@@ -7,6 +7,53 @@ const { generateAccessToken, generateRefreshToken, verifyToken, jwtConfig } = re
 const userRepository = require('../repositories/user.repository');
 const { DuplicateError, AuthenticationError } = require('../utils/errors');
 
+// ─── Account Lockout (Feature #7) ───────────────────────────────────────────
+// Track failed login attempts per email in memory
+const failedAttempts = new Map();
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Check if an account is currently locked.
+ * @param {string} email
+ * @returns {{locked: boolean, minutesRemaining: number}}
+ */
+function checkAccountLock(email) {
+  const record = failedAttempts.get(email);
+  if (!record || record.attempts < MAX_FAILED_ATTEMPTS) {
+    return { locked: false, minutesRemaining: 0 };
+  }
+  const elapsed = Date.now() - record.lockedAt;
+  if (elapsed >= LOCKOUT_DURATION_MS) {
+    // Auto-unlock
+    failedAttempts.delete(email);
+    return { locked: false, minutesRemaining: 0 };
+  }
+  const minutesRemaining = Math.ceil((LOCKOUT_DURATION_MS - elapsed) / 60000);
+  return { locked: true, minutesRemaining };
+}
+
+/**
+ * Record a failed login attempt.
+ * @param {string} email
+ */
+function recordFailedAttempt(email) {
+  const record = failedAttempts.get(email) || { attempts: 0, lockedAt: null };
+  record.attempts += 1;
+  if (record.attempts >= MAX_FAILED_ATTEMPTS) {
+    record.lockedAt = Date.now();
+  }
+  failedAttempts.set(email, record);
+}
+
+/**
+ * Clear failed attempts after successful login.
+ * @param {string} email
+ */
+function clearFailedAttempts(email) {
+  failedAttempts.delete(email);
+}
+
 /**
  * Register a new user account.
  * Checks for duplicate email, hashes password, creates user, creates session,
@@ -31,6 +78,9 @@ async function register(name, email, password) {
 
   // Create user record
   const user = await userRepository.create(name, email, passwordHash);
+
+  // Seed default categories for the new user
+  await seedDefaultCategories(user.id);
 
   // Generate tokens
   const accessToken = generateAccessToken(user.id);
@@ -61,9 +111,18 @@ async function register(name, email, password) {
  * @throws {AuthenticationError} If credentials are invalid (generic message)
  */
 async function login(email, password) {
+  // Check account lockout (Feature #7)
+  const lockStatus = checkAccountLock(email);
+  if (lockStatus.locked) {
+    throw new AuthenticationError(
+      `Account locked. Try again in ${lockStatus.minutesRemaining} minute${lockStatus.minutesRemaining > 1 ? 's' : ''}.`
+    );
+  }
+
   // Find user by email
   const user = await userRepository.findByEmail(email);
   if (!user) {
+    recordFailedAttempt(email);
     throw new AuthenticationError('Invalid credentials');
   }
 
@@ -75,8 +134,12 @@ async function login(email, password) {
   // Compare password with stored hash
   const isValid = await bcrypt.compare(password, user.password_hash);
   if (!isValid) {
+    recordFailedAttempt(email);
     throw new AuthenticationError('Invalid credentials');
   }
+
+  // Clear failed attempts on successful login
+  clearFailedAttempts(email);
 
   // Generate tokens
   const accessToken = generateAccessToken(user.id);
@@ -188,6 +251,50 @@ async function deleteAccount(userId) {
 }
 
 /**
+ * Seed default categories for a newly registered user.
+ * Creates common expense and income categories so users have a starting point.
+ *
+ * @param {string} userId - The new user's UUID
+ */
+async function seedDefaultCategories(userId) {
+  const defaultCategories = [
+    // Expense categories
+    { name: 'Food & Dining', type: 'expense', icon: 'food', color: '#EF4444' },
+    { name: 'Transportation', type: 'expense', icon: 'car', color: '#F97316' },
+    { name: 'Shopping', type: 'expense', icon: 'cart', color: '#8B5CF6' },
+    { name: 'Bills & Utilities', type: 'expense', icon: 'flash', color: '#F59E0B' },
+    { name: 'Entertainment', type: 'expense', icon: 'movie', color: '#EC4899' },
+    { name: 'Health', type: 'expense', icon: 'medical-bag', color: '#10B981' },
+    { name: 'Education', type: 'expense', icon: 'school', color: '#3B82F6' },
+    { name: 'Personal Care', type: 'expense', icon: 'heart', color: '#14B8A6' },
+    { name: 'Groceries', type: 'expense', icon: 'basket', color: '#22C55E' },
+    { name: 'Other Expense', type: 'expense', icon: 'tag', color: '#64748B' },
+    // Income categories
+    { name: 'Salary', type: 'income', icon: 'cash', color: '#10B981' },
+    { name: 'Freelance', type: 'income', icon: 'laptop', color: '#0D9488' },
+    { name: 'Business', type: 'income', icon: 'briefcase', color: '#3B82F6' },
+    { name: 'Investments', type: 'income', icon: 'chart-line', color: '#6366F1' },
+    { name: 'Gifts', type: 'income', icon: 'gift', color: '#EC4899' },
+    { name: 'Other Income', type: 'income', icon: 'tag', color: '#64748B' },
+  ];
+
+  // Insert all default categories in a single batch
+  const values = defaultCategories.map((cat, i) => {
+    const offset = i * 6;
+    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`;
+  }).join(', ');
+
+  const params = defaultCategories.flatMap((cat) => [
+    uuidv4(), userId, cat.name, cat.type, cat.icon, cat.color,
+  ]);
+
+  await query(
+    `INSERT INTO categories (id, user_id, name, type, icon, color) VALUES ${values}`,
+    params
+  );
+}
+
+/**
  * Create a session record with a refresh token and expiration.
  * Internal helper — computes expires_at as 7 days from now.
  *
@@ -215,4 +322,91 @@ module.exports = {
   refreshToken: refreshTokenFn,
   logout,
   deleteAccount,
+  forgotPassword,
+  resetPassword,
 };
+
+// ─── Password Reset (Feature #4) ────────────────────────────────────────────
+// SQL to add columns (run manually on Neon):
+// ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(6);
+// ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP;
+
+/**
+ * Generate a 6-digit OTP code for password reset.
+ * Stores in DB with 15 minute expiry.
+ * Logs OTP to console (email service can be added later).
+ *
+ * @param {string} email - User's email address
+ * @returns {Promise<{message: string}>}
+ */
+async function forgotPassword(email) {
+  const user = await userRepository.findByEmail(email);
+  if (!user) {
+    // Don't reveal if email exists — return success either way
+    return { message: 'If this email is registered, a reset code has been sent.' };
+  }
+
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+  await query(
+    `UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3`,
+    [otp, expires.toISOString(), user.id]
+  );
+
+  // Log OTP to console (replace with email service later)
+  console.log(`[PASSWORD RESET] OTP for ${email}: ${otp} (expires: ${expires.toISOString()})`);
+
+  return { message: 'If this email is registered, a reset code has been sent.' };
+}
+
+/**
+ * Verify OTP code and reset password.
+ *
+ * @param {string} email - User's email
+ * @param {string} code - 6-digit OTP code
+ * @param {string} newPassword - New password to set
+ * @returns {Promise<{message: string}>}
+ * @throws {AuthenticationError} If code is invalid or expired
+ */
+async function resetPassword(email, code, newPassword) {
+  const user = await userRepository.findByEmail(email);
+  if (!user) {
+    throw new AuthenticationError('Invalid or expired reset code');
+  }
+
+  // Verify code matches and hasn't expired
+  const result = await query(
+    `SELECT password_reset_token, password_reset_expires FROM users WHERE id = $1`,
+    [user.id]
+  );
+
+  const row = result.rows[0];
+  if (!row || !row.password_reset_token) {
+    throw new AuthenticationError('Invalid or expired reset code');
+  }
+
+  if (row.password_reset_token !== code) {
+    throw new AuthenticationError('Invalid or expired reset code');
+  }
+
+  if (new Date(row.password_reset_expires) < new Date()) {
+    throw new AuthenticationError('Invalid or expired reset code');
+  }
+
+  // Hash new password
+  const rounds = Math.max(parseInt(process.env.BCRYPT_ROUNDS, 10) || 10, 10);
+  const passwordHash = await bcrypt.hash(newPassword, rounds);
+
+  // Update password and clear reset token
+  await query(
+    `UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL WHERE id = $2`,
+    [passwordHash, user.id]
+  );
+
+  // Invalidate all sessions for security
+  await query(`DELETE FROM sessions WHERE user_id = $1`, [user.id]);
+
+  return { message: 'Password reset successfully. Please log in with your new password.' };
+}

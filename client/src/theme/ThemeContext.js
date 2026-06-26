@@ -63,7 +63,13 @@ export function ThemeProvider({ children }) {
   }), [mode]);
 
   if (isLoading) {
-    return null; // Avoid flash of wrong theme while loading preference
+    // Render children with default light theme while loading preference
+    // This prevents white screen on slow AsyncStorage reads
+    return (
+      <ThemeContext.Provider value={theme}>
+        {children}
+      </ThemeContext.Provider>
+    );
   }
 
   return (

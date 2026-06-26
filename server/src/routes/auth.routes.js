@@ -5,15 +5,16 @@ const authService = require('../services/auth.service');
 const { validate } = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
 const { registerSchema, loginSchema } = require('../validators/auth.validator');
+const { authRateLimiter } = require('../middleware/rateLimiter');
 
 const router = Router();
 
 /**
  * POST /api/auth/register
  * Register a new user account.
- * Validates body with registerSchema, then calls auth.service.register.
+ * Rate limited: 5 attempts per minute per IP.
  */
-router.post('/register', validate(registerSchema), async (req, res, next) => {
+router.post('/register', authRateLimiter, validate(registerSchema), async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
     const result = await authService.register(name, email, password);
@@ -32,9 +33,9 @@ router.post('/register', validate(registerSchema), async (req, res, next) => {
 /**
  * POST /api/auth/login
  * Authenticate a user with email and password.
- * Validates body with loginSchema, then calls auth.service.login.
+ * Rate limited: 5 attempts per minute per IP.
  */
-router.post('/login', validate(loginSchema), async (req, res, next) => {
+router.post('/login', authRateLimiter, validate(loginSchema), async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const result = await authService.login(email, password);
@@ -44,6 +45,66 @@ router.post('/login', validate(loginSchema), async (req, res, next) => {
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       user: result.user,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/auth/forgot-password
+ * Request a password reset OTP code.
+ * Rate limited to prevent abuse.
+ */
+router.post('/forgot-password', authRateLimiter, async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Email is required' },
+      });
+    }
+
+    const result = await authService.forgotPassword(email.trim().toLowerCase());
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Verify OTP code and set new password.
+ */
+router.post('/reset-password', authRateLimiter, async (req, res, next) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Email, code, and newPassword are required' },
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Password must be at least 8 characters' },
+      });
+    }
+
+    const result = await authService.resetPassword(email.trim().toLowerCase(), code, newPassword);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
     });
   } catch (err) {
     next(err);

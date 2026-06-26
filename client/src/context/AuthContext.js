@@ -96,7 +96,10 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const restoreAuth = async () => {
       try {
-        const token = await getAccessToken();
+        // Add timeout failsafe — if SecureStore hangs, proceed as unauthenticated
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
+        const token = await Promise.race([getAccessToken(), timeoutPromise]);
+        
         if (token) {
           // Restore user data from AsyncStorage
           const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);

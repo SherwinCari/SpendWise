@@ -99,4 +99,23 @@ router.get('/trends', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/analytics/insights
+ * Returns AI-powered insights (rule-based, no external API).
+ * Feature #26
+ */
+router.get('/insights', authenticate, async (req, res, next) => {
+  try {
+    const insightsService = require('../services/insights.service');
+    const insights = await insightsService.generateInsights(req.userId);
+
+    res.status(200).json({
+      success: true,
+      data: insights,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

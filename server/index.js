@@ -17,6 +17,9 @@ const walletRoutes = require('./src/routes/wallet.routes');
 const budgetRoutes = require('./src/routes/budget.routes');
 const notificationRoutes = require('./src/routes/notification.routes');
 const analyticsRoutes = require('./src/routes/analytics.routes');
+const recurringRoutes = require('./src/routes/recurring.routes');
+const savingsRoutes = require('./src/routes/savings.routes');
+const remindersRoutes = require('./src/routes/reminders.routes');
 
 // Create Express application
 const app = express();
@@ -41,6 +44,9 @@ app.use('/api/wallets', walletRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/recurring', recurringRoutes);
+app.use('/api/savings', savingsRoutes);
+app.use('/api/reminders', remindersRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
