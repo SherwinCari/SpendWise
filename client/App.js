@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -39,9 +39,10 @@ export default function App() {
     Inter_700Bold,
   });
 
-  const onLayoutRootView = useCallback(async () => {
+  // Hide splash screen as soon as fonts are loaded
+  useEffect(() => {
     if (fontsLoaded) {
-      await SplashScreen.hideAsync();
+      SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
 
@@ -50,7 +51,7 @@ export default function App() {
   }
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+    <View style={{ flex: 1 }}>
       <ThemeProvider>
         <AppProvider>
           <AppContent />
