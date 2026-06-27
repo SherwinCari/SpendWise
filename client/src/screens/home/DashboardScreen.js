@@ -110,7 +110,8 @@ export default function DashboardScreen() {
   const loadData = async () => {
     setLoadError(null);
     try {
-      await Promise.all([
+      // Use Promise.allSettled so one failing request doesn't block others
+      await Promise.allSettled([
         fetchWallets(),
         fetchTransactions({ page: 1, limit: 5 }),
         fetchBudgets(),
@@ -119,10 +120,9 @@ export default function DashboardScreen() {
         fetchInsights(),
       ]);
     } catch (err) {
-      if (err.message === 'Network Error' || !err.response) {
+      if (err?.message === 'Network Error' || !err?.response) {
         setLoadError('No internet connection. Pull down to retry.');
       }
-      // Individual errors are also handled in each context
     } finally {
       setInitialLoading(false);
     }
