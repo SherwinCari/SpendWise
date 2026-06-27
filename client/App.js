@@ -13,7 +13,6 @@ import {
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AppProvider } from './src/context/AppProvider';
 import RootNavigator from './src/navigation/RootNavigator';
-import BiometricLock from './src/components/BiometricLock';
 
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
@@ -23,9 +22,7 @@ function AppContent() {
 
   return (
     <>
-      <BiometricLock>
-        <RootNavigator />
-      </BiometricLock>
+      <RootNavigator />
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </>
   );

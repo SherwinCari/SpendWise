@@ -9,6 +9,7 @@ import {
   getRefreshToken,
   setSessionExpiredHandler,
 } from '../api/client';
+import { requestNotificationPermissions } from '../utils/pushNotifications';
 
 const AuthContext = createContext(null);
 const USER_STORAGE_KEY = '@spendwise_user';
@@ -128,6 +129,8 @@ export function AuthProvider({ children }) {
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
       setUser(userData);
       setIsAuthenticated(true);
+      // Request push notification permissions
+      requestNotificationPermissions().catch(() => {});
       return userData;
     } catch (err) {
       const message =
@@ -150,6 +153,8 @@ export function AuthProvider({ children }) {
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
       setUser(userData);
       setIsAuthenticated(true);
+      // Request push notification permissions
+      requestNotificationPermissions().catch(() => {});
       return userData;
     } catch (err) {
       const message =

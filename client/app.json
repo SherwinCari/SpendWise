@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "SpendWise",
+    "name": "Quoarax - Finance Tracker",
     "slug": "client",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -31,12 +31,18 @@
       "expo-secure-store",
       "@react-native-community/datetimepicker",
       "expo-web-browser",
-      "expo-local-authentication",
       [
         "expo-image-picker",
         {
           "photosPermission": "SpendWise needs access to your photos to attach receipts to transactions.",
           "cameraPermission": "SpendWise needs access to your camera to photograph receipts."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0D9488"
         }
       ]
     ],
