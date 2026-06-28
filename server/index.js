@@ -57,13 +57,13 @@ app.get('/api/health', (_req, res) => {
 app.get('/', (_req, res) => {
   res.send(`
     <!DOCTYPE html>
-    <html><head><title>SpendWise</title><meta name="viewport" content="width=device-width,initial-scale=1">
+    <html><head><title>Quorax</title><meta name="viewport" content="width=device-width,initial-scale=1">
     <style>body{font-family:-apple-system,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#0F172A;color:#F1F5F9;text-align:center}
     .container{max-width:500px;padding:40px}.title{font-size:2.5rem;color:#0D9488;margin-bottom:8px}.subtitle{color:#94A3B8;font-size:1.1rem}
     a{color:#0D9488;text-decoration:none}</style></head>
     <body><div class="container">
-    <h1 class="title">SpendWise</h1>
-    <p class="subtitle">Smart Expense Tracker API</p>
+    <h1 class="title">Quorax</h1>
+    <p class="subtitle">Smart Finance Tracker API</p>
     <p style="margin-top:24px;color:#64748B">API is running. Download the app to get started.</p>
     <p style="margin-top:16px"><a href="/privacy">Privacy Policy</a></p>
     </div></body></html>
@@ -74,15 +74,15 @@ app.get('/', (_req, res) => {
 app.get('/privacy', (_req, res) => {
   res.send(`
     <!DOCTYPE html>
-    <html><head><title>SpendWise - Privacy Policy</title><meta name="viewport" content="width=device-width,initial-scale=1">
+    <html><head><title>Quorax - Privacy Policy</title><meta name="viewport" content="width=device-width,initial-scale=1">
     <style>body{font-family:-apple-system,sans-serif;max-width:700px;margin:0 auto;padding:40px 20px;background:#F8FAFC;color:#1E293B;line-height:1.7}
     h1{color:#0D9488}h2{color:#334155;margin-top:32px}a{color:#0D9488}</style></head>
     <body>
-    <h1>SpendWise Privacy Policy</h1>
+    <h1>Quorax Privacy Policy</h1>
     <p><em>Last updated: June 2026</em></p>
     
     <h2>1. Information We Collect</h2>
-    <p>When you use SpendWise, we collect:</p>
+    <p>When you use Quorax, we collect:</p>
     <ul>
       <li><strong>Account Information:</strong> Name, email address, and encrypted password when you register.</li>
       <li><strong>Financial Data:</strong> Transaction records, wallet balances, budget limits, and categories you create.</li>
@@ -91,7 +91,7 @@ app.get('/privacy', (_req, res) => {
 
     <h2>2. How We Use Your Information</h2>
     <ul>
-      <li>Provide and maintain the SpendWise service</li>
+      <li>Provide and maintain the Quorax service</li>
       <li>Track your income, expenses, and budgets</li>
       <li>Generate financial reports and analytics</li>
       <li>Send budget alerts and notifications</li>
@@ -141,7 +141,7 @@ const PORT = parseInt(process.env.PORT, 10) || 3000;
 // Only start listening when this file is run directly (not when imported for testing)
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`SpendWise server listening on port ${PORT}`);
+    console.log(`Quorax server listening on port ${PORT}`);
   });
 }
 

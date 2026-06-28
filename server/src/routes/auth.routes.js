@@ -6,6 +6,9 @@ const { validate } = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
 const { registerSchema, loginSchema } = require('../validators/auth.validator');
 const { authRateLimiter } = require('../middleware/rateLimiter');
+const emailService = require('../services/email.service');
+const { query } = require('../config/database');
+const bcrypt = require('bcrypt');
 
 const router = Router();
 
@@ -187,6 +190,116 @@ router.delete('/account', authenticate, async (req, res, next) => {
       success: true,
       message: result.message,
       deletedAt: result.deletedAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// In-memory store for password change codes
+const passwordChangeCodes = new Map();
+
+/**
+ * POST /api/auth/request-password-change
+ * Authenticated user requests a password change.
+ * Generates a 6-digit code, stores with 10min expiry, emails it.
+ */
+router.post('/request-password-change', authenticate, authRateLimiter, async (req, res, next) => {
+  try {
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'New password must be at least 8 characters' },
+      });
+    }
+
+    // Get user email
+    const userResult = await query('SELECT email FROM users WHERE id = $1', [req.userId]);
+    const user = userResult.rows[0];
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'User not found' },
+      });
+    }
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    // Store code in memory
+    passwordChangeCodes.set(req.userId, { code, expiresAt, newPassword });
+
+    // Send email
+    try {
+      await emailService.sendPasswordChangeCode(user.email, code);
+    } catch (emailErr) {
+      console.error('[EMAIL] Failed to send password change code:', emailErr.message);
+      // Still log the code for development fallback
+      console.log(`[PASSWORD CHANGE] Code for ${user.email}: ${code}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Verification code sent to your email.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/auth/confirm-password-change
+ * Verify the 6-digit code and update the password.
+ */
+router.post('/confirm-password-change', authenticate, authRateLimiter, async (req, res, next) => {
+  try {
+    const { code, newPassword } = req.body;
+
+    if (!code || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Code and new password are required' },
+      });
+    }
+
+    const record = passwordChangeCodes.get(req.userId);
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CODE', message: 'No pending password change request. Please request a new code.' },
+      });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      passwordChangeCodes.delete(req.userId);
+      return res.status(400).json({
+        success: false,
+        error: { code: 'CODE_EXPIRED', message: 'Verification code has expired. Please request a new one.' },
+      });
+    }
+
+    if (record.code !== code) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CODE', message: 'Incorrect verification code.' },
+      });
+    }
+
+    // Hash new password and update
+    const rounds = Math.max(parseInt(process.env.BCRYPT_ROUNDS, 10) || 10, 10);
+    const passwordHash = await bcrypt.hash(newPassword, rounds);
+
+    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, req.userId]);
+
+    // Clean up
+    passwordChangeCodes.delete(req.userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully.',
     });
   } catch (err) {
     next(err);
