@@ -123,7 +123,7 @@ async function login(email, password) {
   const user = await userRepository.findByEmail(email);
   if (!user) {
     recordFailedAttempt(email);
-    throw new AuthenticationError('Invalid credentials');
+    throw new AuthenticationError('Incorrect email or password');
   }
 
   // Check if account is deleted
@@ -135,7 +135,12 @@ async function login(email, password) {
   const isValid = await bcrypt.compare(password, user.password_hash);
   if (!isValid) {
     recordFailedAttempt(email);
-    throw new AuthenticationError('Invalid credentials');
+    // Check if this attempt triggered lockout
+    const postCheck = checkAccountLock(email);
+    if (postCheck.locked) {
+      throw new AuthenticationError('Account locked due to too many failed attempts. Try again in 10 minutes.');
+    }
+    throw new AuthenticationError('Incorrect email or password');
   }
 
   // Clear failed attempts on successful login

@@ -1,74 +1,119 @@
 'use strict';
 
 /**
- * Rate Limiter Middleware for Auth Endpoints
- * Limits to 5 attempts per minute per IP on login/register.
- * Returns 429 with friendly message when exceeded.
+ * Rate Limiter + Account Lockout Middleware
+ * 
+ * Two layers of protection:
+ * 1. IP-based rate limiting: 10 requests per minute per IP on auth endpoints
+ * 2. Email-based account lockout: 5 failed login attempts → locked for 10 minutes
  */
 
-// Simple in-memory rate limiter (no external dependency needed)
-const attempts = new Map();
+// In-memory stores
+const ipAttempts = new Map();
+const emailLockouts = new Map();
 
-const WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_ATTEMPTS = 5;
+const IP_WINDOW_MS = 60 * 1000; // 1 minute window for IP rate limiting
+const IP_MAX_ATTEMPTS = 10; // 10 requests per minute per IP
+const LOCKOUT_MAX_ATTEMPTS = 5; // 5 failed logins per email
+const LOCKOUT_DURATION_MS = 10 * 60 * 1000; // 10 minutes lockout
 
-/**
- * Clean up expired entries periodically
- */
+// Clean up expired entries every 2 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [key, data] of attempts.entries()) {
-    if (now - data.windowStart > WINDOW_MS) {
-      attempts.delete(key);
+  for (const [key, data] of ipAttempts.entries()) {
+    if (now - data.windowStart > IP_WINDOW_MS) {
+      ipAttempts.delete(key);
     }
   }
-}, 60 * 1000);
+  for (const [key, data] of emailLockouts.entries()) {
+    if (data.lockedUntil && now > data.lockedUntil) {
+      emailLockouts.delete(key);
+    }
+  }
+}, 2 * 60 * 1000);
 
 /**
- * Rate limiter middleware factory
- * @param {object} options
- * @param {number} [options.windowMs] - Time window in milliseconds (default: 60000)
- * @param {number} [options.max] - Maximum attempts in window (default: 5)
- * @returns {function} Express middleware
+ * IP-based rate limiter for auth endpoints.
+ * Blocks after 10 requests per minute from the same IP.
  */
-function createRateLimiter(options = {}) {
-  const windowMs = options.windowMs || WINDOW_MS;
-  const max = options.max || MAX_ATTEMPTS;
+function authRateLimiter(req, res, next) {
+  const key = `${req.ip}:${req.originalUrl}`;
+  const now = Date.now();
+  const record = ipAttempts.get(key);
 
-  return (req, res, next) => {
-    const key = `${req.ip}:${req.originalUrl}`;
-    const now = Date.now();
+  if (!record || now - record.windowStart > IP_WINDOW_MS) {
+    ipAttempts.set(key, { count: 1, windowStart: now });
+    return next();
+  }
 
-    const record = attempts.get(key);
+  record.count += 1;
 
-    if (!record) {
-      attempts.set(key, { count: 1, windowStart: now });
-      return next();
-    }
+  if (record.count > IP_MAX_ATTEMPTS) {
+    return res.status(429).json({
+      success: false,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many attempts. Please try again in a minute.',
+      },
+    });
+  }
 
-    // Reset window if expired
-    if (now - record.windowStart > windowMs) {
-      attempts.set(key, { count: 1, windowStart: now });
-      return next();
-    }
-
-    // Increment count
-    record.count += 1;
-
-    if (record.count > max) {
-      return res.status(429).json({
-        success: false,
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: 'Too many attempts. Please try again later.',
-        },
-      });
-    }
-
-    next();
-  };
+  next();
 }
 
-const authRateLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 5 });
+/**
+ * Check if an email is currently locked out.
+ * @param {string} email
+ * @returns {{ locked: boolean, minutesRemaining?: number }}
+ */
+function isAccountLocked(email) {
+  const record = emailLockouts.get(email.toLowerCase());
+  if (!record || !record.lockedUntil) return { locked: false };
 
-module.exports = { createRateLimiter, authRateLimiter };
+  const now = Date.now();
+  if (now < record.lockedUntil) {
+    const minutesRemaining = Math.ceil((record.lockedUntil - now) / 60000);
+    return { locked: true, minutesRemaining };
+  }
+
+  // Lockout expired — clear it
+  emailLockouts.delete(email.toLowerCase());
+  return { locked: false };
+}
+
+/**
+ * Record a failed login attempt for an email.
+ * Locks the account after 5 failures for 10 minutes.
+ * @param {string} email
+ * @returns {{ locked: boolean, attemptsRemaining?: number }}
+ */
+function recordFailedAttempt(email) {
+  const key = email.toLowerCase();
+  const record = emailLockouts.get(key) || { count: 0, lockedUntil: null };
+
+  record.count += 1;
+
+  if (record.count >= LOCKOUT_MAX_ATTEMPTS) {
+    record.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+    emailLockouts.set(key, record);
+    return { locked: true, attemptsRemaining: 0 };
+  }
+
+  emailLockouts.set(key, record);
+  return { locked: false, attemptsRemaining: LOCKOUT_MAX_ATTEMPTS - record.count };
+}
+
+/**
+ * Clear failed attempts for an email (call on successful login).
+ * @param {string} email
+ */
+function clearFailedAttempts(email) {
+  emailLockouts.delete(email.toLowerCase());
+}
+
+module.exports = {
+  authRateLimiter,
+  isAccountLocked,
+  recordFailedAttempt,
+  clearFailedAttempts,
+};

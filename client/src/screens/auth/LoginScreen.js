@@ -173,25 +173,6 @@ export default function LoginScreen({ navigation }) {
 
         {/* Form */}
         <View style={[styles.form, { gap: spacing.base }]}>
-          {/* Server Error */}
-          {serverError ? (
-            <View
-              style={[
-                styles.errorBanner,
-                {
-                  backgroundColor: colors.expense + '12',
-                  borderRadius: 8,
-                  padding: spacing.md,
-                },
-              ]}
-              accessibilityRole="alert"
-            >
-              <Text style={[styles.errorBannerText, { color: colors.expense }]}>
-                {serverError}
-              </Text>
-            </View>
-          ) : null}
-
           <Input
             label="Email"
             value={email}
@@ -212,12 +193,25 @@ export default function LoginScreen({ navigation }) {
             error={fieldErrors.password}
           />
 
+          {/* Error message above login button */}
+          {serverError ? (
+            <Text
+              style={[
+                styles.loginError,
+                { color: colors.expense, fontSize: fontSize.sm, marginTop: spacing.sm },
+              ]}
+              accessibilityRole="alert"
+            >
+              {serverError}
+            </Text>
+          ) : null}
+
           <Button
             title="Login"
             onPress={handleLogin}
             loading={loading}
             disabled={loading}
-            style={{ marginTop: spacing.md }}
+            style={{ marginTop: spacing.sm }}
           />
 
           {/* Forgot Password Link (Feature #4) */}
@@ -349,6 +343,10 @@ const styles = StyleSheet.create({
   errorBannerText: {
     fontSize: 14,
     textAlign: 'center',
+  },
+  loginError: {
+    textAlign: 'center',
+    fontWeight: '500',
   },
   footer: {
     flexDirection: 'row',
