@@ -1,14 +1,23 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthStack from './AuthStack';
 import MainTabs from './MainTabs';
+import OnboardingScreen, { ONBOARDING_KEY } from '../screens/onboarding/OnboardingScreen';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 
 export default function RootNavigator() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, initializing } = useAuth();
   const { colors, isDark } = useTheme();
+  const [onboardingComplete, setOnboardingComplete] = useState(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then((value) => {
+      setOnboardingComplete(value === 'true');
+    });
+  }, []);
 
   const navigationTheme = useMemo(() => ({
     ...(isDark ? DarkTheme : DefaultTheme),
@@ -22,11 +31,17 @@ export default function RootNavigator() {
     },
   }), [isDark, colors]);
 
-  if (loading) {
+  if (initializing || onboardingComplete === null) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
+    );
+  }
+
+  if (!onboardingComplete) {
+    return (
+      <OnboardingScreen onComplete={() => setOnboardingComplete(true)} />
     );
   }
 

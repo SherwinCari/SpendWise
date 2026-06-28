@@ -4,11 +4,13 @@
  * - Total balance across all wallets
  * - Monthly income/expense summary cards
  * - Quick action buttons (Add Income / Add Expense)
+ * - Weekly summary card (Feature 12)
+ * - Spending streak (Feature 11)
+ * - Biggest expense badge (Feature 14)
+ * - Average daily spending (Feature 15)
  * - Recent transactions (last 5)
  * - Budget alerts for budgets approaching/exceeding limits
  * - Pull-to-refresh support
- *
- * Requirements: 10.2, 13.1, 9.1, 9.2, 9.3
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -27,6 +29,7 @@ import { useWallets } from '../../context/WalletContext';
 import { useTransactions } from '../../context/TransactionContext';
 import { useBudgets } from '../../context/BudgetContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { useCurrency, formatCurrency as formatCurrencyUtil } from '../../utils/currency';
 import Card from '../../components/common/Card';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
@@ -41,6 +44,7 @@ export default function DashboardScreen() {
   const { transactions, fetchTransactions } = useTransactions();
   const { budgets, fetchBudgets } = useBudgets();
   const { fetchNotifications } = useNotifications();
+  const { currency } = useCurrency();
 
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -74,6 +78,95 @@ export default function DashboardScreen() {
       .sort((a, b) => b.percentage - a.percentage);
   }, [budgets]);
 
+  // ─── Feature 12: Weekly Summary ───────────────────────────────────────
+  const weeklySummary = useMemo(() => {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const weekTransactions = transactions.filter((t) => {
+      const d = new Date(t.date);
+      return d >= weekAgo && d <= now && t.type === 'expense';
+    });
+
+    const totalSpent = weekTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const count = weekTransactions.length;
+
+    // Top category
+    const categoryCount = {};
+    weekTransactions.forEach((t) => {
+      const cat = t.categoryName || 'Other';
+      categoryCount[cat] = (categoryCount[cat] || 0) + (parseFloat(t.amount) || 0);
+    });
+    const topCategory = Object.entries(categoryCount).sort((a, b) => b[1] - a[1])[0];
+
+    return { totalSpent, count, topCategory: topCategory ? topCategory[0] : null };
+  }, [transactions]);
+
+  // ─── Feature 11: Spending Streak ──────────────────────────────────────
+  const spendingStreak = useMemo(() => {
+    if (transactions.length === 0) return null;
+
+    // Find top spending category
+    const categorySpending = {};
+    transactions.filter(t => t.type === 'expense').forEach((t) => {
+      const cat = t.categoryName || 'Other';
+      categorySpending[cat] = (categorySpending[cat] || 0) + (parseFloat(t.amount) || 0);
+    });
+
+    const topCat = Object.entries(categorySpending).sort((a, b) => b[1] - a[1])[0];
+    if (!topCat) return null;
+
+    const targetCategory = topCat[0];
+
+    // Calculate streak of days without spending in that category
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let streak = 0;
+
+    for (let i = 0; i < 365; i++) {
+      const checkDate = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = checkDate.toISOString().split('T')[0];
+      const hasExpense = transactions.some(
+        (t) => t.type === 'expense' && t.categoryName === targetCategory && t.date?.split('T')[0] === dateStr
+      );
+      if (hasExpense) break;
+      streak++;
+    }
+
+    return streak > 0 ? { days: streak, category: targetCategory } : null;
+  }, [transactions]);
+
+  // ─── Feature 14: Biggest Expense Badge ────────────────────────────────
+  const biggestExpense = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthExpenses = transactions.filter((t) => {
+      const d = new Date(t.date);
+      return t.type === 'expense' && d >= monthStart && d <= now;
+    });
+
+    if (monthExpenses.length === 0) return null;
+
+    return monthExpenses.reduce((max, t) => {
+      const amount = parseFloat(t.amount) || 0;
+      return amount > (parseFloat(max.amount) || 0) ? t : max;
+    }, monthExpenses[0]);
+  }, [transactions]);
+
+  // ─── Feature 15: Average Daily Spending ───────────────────────────────
+  const avgDailySpending = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const daysElapsed = Math.max(1, Math.ceil((now - monthStart) / (1000 * 60 * 60 * 24)));
+
+    const monthExpenses = transactions.filter((t) => {
+      const d = new Date(t.date);
+      return t.type === 'expense' && d >= monthStart && d <= now;
+    });
+
+    const totalSpent = monthExpenses.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    return totalSpent / daysElapsed;
+  }, [transactions]);
+
   // Fetch monthly summary from analytics API
   const fetchMonthlySummary = useCallback(async () => {
     try {
@@ -92,7 +185,7 @@ export default function DashboardScreen() {
     }
   }, []);
 
-  // Fetch AI insights (Feature #26)
+  // Fetch AI insights
   const fetchInsights = useCallback(async () => {
     try {
       const response = await analyticsApi.getInsights();
@@ -110,10 +203,9 @@ export default function DashboardScreen() {
   const loadData = async () => {
     setLoadError(null);
     try {
-      // Use Promise.allSettled so one failing request doesn't block others
       await Promise.allSettled([
         fetchWallets(),
-        fetchTransactions({ page: 1, limit: 5 }),
+        fetchTransactions({ page: 1, limit: 50 }),
         fetchBudgets(),
         fetchNotifications(),
         fetchMonthlySummary(),
@@ -135,17 +227,14 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, []);
 
-  // Format currency amount
-  const formatCurrency = (amount) => {
-    const num = parseFloat(amount) || 0;
-    return `₱${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+  // Format currency amount using user preference
+  const fmtCurrency = (amount) => formatCurrencyUtil(amount, currency);
 
   // Get budget alert indicator color
   const getBudgetAlertColor = (percentage) => {
-    if (percentage >= 100) return colors.expense; // Red — exceeded
-    if (percentage >= 75) return colors.expense;  // Red — critical
-    return colors.accent;                         // Gold — approaching
+    if (percentage >= 100) return colors.expense;
+    if (percentage >= 75) return colors.expense;
+    return colors.accent;
   };
 
   if (initialLoading) {
@@ -200,9 +289,9 @@ export default function DashboardScreen() {
         </Text>
         <Text
           style={[styles.balanceAmount, { color: colors.primary, fontSize: fontSize.xxl, fontWeight: fontWeight.bold }]}
-          accessibilityLabel={`Total balance ${formatCurrency(totalBalance)}`}
+          accessibilityLabel={`Total balance ${fmtCurrency(totalBalance)}`}
         >
-          {formatCurrency(totalBalance)}
+          {fmtCurrency(totalBalance)}
         </Text>
       </View>
 
@@ -220,7 +309,7 @@ export default function DashboardScreen() {
               style={[styles.summaryAmount, { color: colors.income, fontSize: fontSize.lg, fontWeight: fontWeight.semiBold }]}
               numberOfLines={1}
             >
-              {formatCurrency(monthlySummary.totalIncome)}
+              {fmtCurrency(monthlySummary.totalIncome)}
             </Text>
           </View>
         </Card>
@@ -237,7 +326,7 @@ export default function DashboardScreen() {
               style={[styles.summaryAmount, { color: colors.expense, fontSize: fontSize.lg, fontWeight: fontWeight.semiBold }]}
               numberOfLines={1}
             >
-              {formatCurrency(monthlySummary.totalExpenses)}
+              {fmtCurrency(monthlySummary.totalExpenses)}
             </Text>
           </View>
         </Card>
@@ -291,6 +380,75 @@ export default function DashboardScreen() {
           <Text style={styles.quickActionText}>Add Expense</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ─── Feature 12: Weekly Summary Card ─────────────────────────────── */}
+      {weeklySummary.count > 0 && (
+        <Card style={[styles.insightCard, { marginHorizontal: spacing.base, marginTop: spacing.lg }]}>
+          <View style={styles.insightRow}>
+            <Text style={{ fontSize: 20, marginRight: 10 }}>📅</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.insightTitle, { color: colors.textPrimary, fontWeight: fontWeight.semiBold, fontSize: fontSize.sm }]}>
+                Weekly Summary
+              </Text>
+              <Text style={[{ color: colors.textSecondary, fontSize: fontSize.xs, lineHeight: 18, marginTop: 2 }]}>
+                This week you spent {fmtCurrency(weeklySummary.totalSpent)} on {weeklySummary.count} transaction{weeklySummary.count !== 1 ? 's' : ''}.
+                {weeklySummary.topCategory ? ` Top category: ${weeklySummary.topCategory}` : ''}
+              </Text>
+            </View>
+          </View>
+        </Card>
+      )}
+
+      {/* ─── Feature 11: Spending Streak ─────────────────────────────────── */}
+      {spendingStreak && spendingStreak.days > 1 && (
+        <Card style={[styles.insightCard, { marginHorizontal: spacing.base, marginTop: spacing.sm }]}>
+          <View style={styles.insightRow}>
+            <Text style={{ fontSize: 20, marginRight: 10 }}>🔥</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.insightTitle, { color: colors.textPrimary, fontWeight: fontWeight.semiBold, fontSize: fontSize.sm }]}>
+                Spending Streak
+              </Text>
+              <Text style={[{ color: colors.textSecondary, fontSize: fontSize.xs, lineHeight: 18, marginTop: 2 }]}>
+                {spendingStreak.days} day{spendingStreak.days !== 1 ? 's' : ''} without spending on {spendingStreak.category}
+              </Text>
+            </View>
+          </View>
+        </Card>
+      )}
+
+      {/* ─── Feature 14: Biggest Expense Badge ───────────────────────────── */}
+      {biggestExpense && (
+        <Card style={[styles.insightCard, { marginHorizontal: spacing.base, marginTop: spacing.sm }]}>
+          <View style={styles.insightRow}>
+            <Text style={{ fontSize: 20, marginRight: 10 }}>💸</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.insightTitle, { color: colors.textPrimary, fontWeight: fontWeight.semiBold, fontSize: fontSize.sm }]}>
+                Biggest Expense
+              </Text>
+              <Text style={[{ color: colors.textSecondary, fontSize: fontSize.xs, lineHeight: 18, marginTop: 2 }]}>
+                {fmtCurrency(biggestExpense.amount)} on {biggestExpense.description || biggestExpense.categoryName || 'expense'}
+              </Text>
+            </View>
+          </View>
+        </Card>
+      )}
+
+      {/* ─── Feature 15: Average Daily Spending ──────────────────────────── */}
+      {avgDailySpending > 0 && (
+        <Card style={[styles.insightCard, { marginHorizontal: spacing.base, marginTop: spacing.sm }]}>
+          <View style={styles.insightRow}>
+            <Text style={{ fontSize: 20, marginRight: 10 }}>📊</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.insightTitle, { color: colors.textPrimary, fontWeight: fontWeight.semiBold, fontSize: fontSize.sm }]}>
+                Average Daily Spending
+              </Text>
+              <Text style={[{ color: colors.textSecondary, fontSize: fontSize.xs, lineHeight: 18, marginTop: 2 }]}>
+                {fmtCurrency(avgDailySpending)} per day this month
+              </Text>
+            </View>
+          </View>
+        </Card>
+      )}
 
       {/* Recent Transactions */}
       <View style={[styles.section, { marginTop: spacing.lg }]}>
@@ -377,7 +535,7 @@ export default function DashboardScreen() {
                     {budget.categoryName || 'Budget'}
                   </Text>
                   <Text style={[styles.alertDetail, { color: colors.textSecondary, fontSize: fontSize.xs }]}>
-                    {Math.round(budget.percentage)}% used — {formatCurrency(budget.spent || 0)} of {formatCurrency(budget.amountLimit || 0)}
+                    {Math.round(budget.percentage)}% used — {fmtCurrency(budget.spent || 0)} of {fmtCurrency(budget.amountLimit || 0)}
                   </Text>
                 </View>
                 <Icon
@@ -405,7 +563,7 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {/* AI Insights (Feature #26) */}
+      {/* AI Insights */}
       {insights.length > 0 && (
         <View style={[styles.section, { marginTop: spacing.lg }]}>
           <View style={[styles.sectionHeader, { paddingHorizontal: spacing.base }]}>
@@ -503,6 +661,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 6,
   },
+  // Insight cards
+  insightCard: {},
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  insightTitle: {},
   // Section
   section: {},
   sectionHeader: {

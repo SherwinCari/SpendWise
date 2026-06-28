@@ -5,7 +5,7 @@
  * Requirements: 10.1, 10.2, 10.3, 10.4
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -46,6 +46,7 @@ export default function WalletListScreen({ navigation }) {
   const [formError, setFormError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [sortBy, setSortBy] = useState('created'); // 'balance' | 'name' | 'created'
 
   useEffect(() => {
     fetchWallets();
@@ -73,6 +74,20 @@ export default function WalletListScreen({ navigation }) {
       maximumFractionDigits: 2,
     });
   };
+
+  // Sorted wallets based on selected sort option
+  const sortedWallets = useMemo(() => {
+    const list = [...wallets];
+    switch (sortBy) {
+      case 'balance':
+        return list.sort((a, b) => (parseFloat(b.balance) || 0) - (parseFloat(a.balance) || 0));
+      case 'name':
+        return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      case 'created':
+      default:
+        return list; // Already ordered by recently created from API
+    }
+  }, [wallets, sortBy]);
 
   // --- Add Wallet ---
   const handleOpenAddModal = () => {
@@ -194,29 +209,68 @@ export default function WalletListScreen({ navigation }) {
 
   // --- Total Balance Header ---
   const renderHeader = () => (
-    <View
-      style={[
-        styles.totalBalanceCard,
-        {
-          backgroundColor: colors.primary,
-          borderRadius: borderRadius.card,
-          padding: spacing.lg,
-          marginBottom: spacing.lg,
-          ...shadows.cardElevated,
-        },
-      ]}
-      accessibilityRole="summary"
-      accessibilityLabel={`Total balance: ${formatCurrency(totalBalance)}`}
-    >
-      <Text style={[styles.totalLabel, { color: '#FFFFFF', opacity: 0.85 }]}>
-        Total Balance
-      </Text>
-      <Text style={[styles.totalAmount, { color: '#FFFFFF' }]}>
-        {formatCurrency(totalBalance)}
-      </Text>
-      <Text style={[styles.walletCount, { color: '#FFFFFF', opacity: 0.7 }]}>
-        {wallets.length} {wallets.length === 1 ? 'wallet' : 'wallets'}
-      </Text>
+    <View>
+      <View
+        style={[
+          styles.totalBalanceCard,
+          {
+            backgroundColor: colors.primary,
+            borderRadius: borderRadius.card,
+            padding: spacing.lg,
+            marginBottom: spacing.md,
+            ...shadows.cardElevated,
+          },
+        ]}
+        accessibilityRole="summary"
+        accessibilityLabel={`Total balance: ${formatCurrency(totalBalance)}`}
+      >
+        <Text style={[styles.totalLabel, { color: '#FFFFFF', opacity: 0.85 }]}>
+          Total Balance
+        </Text>
+        <Text style={[styles.totalAmount, { color: '#FFFFFF' }]}>
+          {formatCurrency(totalBalance)}
+        </Text>
+        <Text style={[styles.walletCount, { color: '#FFFFFF', opacity: 0.7 }]}>
+          {wallets.length} {wallets.length === 1 ? 'wallet' : 'wallets'}
+        </Text>
+      </View>
+
+      {/* Sort Options */}
+      <View style={[styles.sortRow, { marginBottom: spacing.md }]}>
+        {[
+          { key: 'created', label: 'Recent' },
+          { key: 'balance', label: 'Balance' },
+          { key: 'name', label: 'A-Z' },
+        ].map((option) => (
+          <TouchableOpacity
+            key={option.key}
+            style={[
+              styles.sortChip,
+              {
+                backgroundColor: sortBy === option.key ? colors.primary : colors.card,
+                borderRadius: 16,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                marginRight: 8,
+                ...shadows.card,
+              },
+            ]}
+            onPress={() => setSortBy(option.key)}
+            accessibilityRole="button"
+            accessibilityLabel={`Sort by ${option.label}`}
+          >
+            <Text
+              style={{
+                color: sortBy === option.key ? '#FFFFFF' : colors.textSecondary,
+                fontSize: 12,
+                fontWeight: '500',
+              }}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 
@@ -258,7 +312,7 @@ export default function WalletListScreen({ navigation }) {
         />
       ) : (
         <FlatList
-          data={wallets}
+          data={sortedWallets}
           keyExtractor={(item) => item.id}
           renderItem={renderWalletItem}
           ListHeaderComponent={
@@ -468,4 +522,9 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     lineHeight: 30,
   },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sortChip: {},
 });

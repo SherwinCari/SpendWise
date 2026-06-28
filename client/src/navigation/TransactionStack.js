@@ -3,6 +3,7 @@ import { createStackNavigator, TransitionPresets } from '@react-navigation/stack
 import TransactionListScreen from '../screens/transactions/TransactionListScreen';
 import TransactionDetailsScreen from '../screens/transactions/TransactionDetailsScreen';
 import AddEditTransactionScreen from '../screens/transactions/AddEditTransactionScreen';
+import CalendarViewScreen from '../screens/transactions/CalendarViewScreen';
 import { useTheme } from '../theme/ThemeContext';
 
 const Stack = createStackNavigator();
@@ -35,6 +36,11 @@ export default function TransactionStack() {
         name="AddEditTransaction"
         component={AddEditTransactionScreen}
         options={{ title: 'Transaction' }}
+      />
+      <Stack.Screen
+        name="CalendarView"
+        component={CalendarViewScreen}
+        options={{ title: 'Calendar' }}
       />
     </Stack.Navigator>
   );

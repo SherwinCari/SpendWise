@@ -159,7 +159,7 @@ export default function LoginScreen({ navigation }) {
               { color: colors.textPrimary, fontWeight: fontWeight.bold },
             ]}
           >
-            SpendWise
+            Quorax
           </Text>
           <Text
             style={[
@@ -287,7 +287,7 @@ export default function LoginScreen({ navigation }) {
             // For now, show an alert with key points
             Alert.alert(
               'Privacy Policy',
-              'SpendWise respects your privacy. We only collect data needed to provide the service (email, financial records). We never sell your data to third parties. Your passwords are encrypted and all communication uses HTTPS.\n\nFull policy available in Settings → Privacy Policy.',
+              'Quorax respects your privacy. We only collect data needed to provide the service (email, financial records). We never sell your data to third parties. Your passwords are encrypted and all communication uses HTTPS.\n\nFull policy available in Settings → Privacy Policy.',
               [{ text: 'OK' }]
             );
           }}

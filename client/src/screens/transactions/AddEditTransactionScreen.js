@@ -17,13 +17,19 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
+  Text,
+  Modal,
+  FlatList,
 } from 'react-native';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { useTransactions } from '../../context/TransactionContext';
 import { useCategories } from '../../context/CategoryContext';
 import { useWallets } from '../../context/WalletContext';
 import TransactionForm from '../../components/transactions/TransactionForm';
 import { LoadingSpinner } from '../../components/common';
+import { getTemplates } from '../more/TransactionTemplatesScreen';
 
 export default function AddEditTransactionScreen({ navigation, route }) {
   const { colors } = useTheme();
@@ -38,6 +44,9 @@ export default function AddEditTransactionScreen({ navigation, route }) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [templates, setTemplates] = useState([]);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [templateValues, setTemplateValues] = useState(null);
 
   // Set screen title based on mode
   useEffect(() => {
@@ -52,6 +61,8 @@ export default function AddEditTransactionScreen({ navigation, route }) {
       setIsDataLoading(true);
       try {
         await Promise.all([fetchCategories(), fetchWallets()]);
+        const tmpl = await getTemplates();
+        setTemplates(tmpl);
       } catch (err) {
         // Contexts handle their own errors; we just stop the loading state
       } finally {
@@ -62,7 +73,9 @@ export default function AddEditTransactionScreen({ navigation, route }) {
   }, [fetchCategories, fetchWallets]);
 
   // Build initial values for the form
-  const initialValues = isEditMode
+  const initialValues = templateValues
+    ? templateValues
+    : isEditMode
     ? {
         type: existingTransaction.type || transactionType,
         amount: existingTransaction.amount,
@@ -120,13 +133,36 @@ export default function AddEditTransactionScreen({ navigation, route }) {
     );
   }
 
+  const handleTemplateSelect = (template) => {
+    setTemplateValues({
+      type: template.type || transactionType,
+      amount: template.amount || undefined,
+      description: template.name || '',
+    });
+    setShowTemplatePicker(false);
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
+      {/* From Template Button */}
+      {!isEditMode && templates.length > 0 && (
+        <TouchableOpacity
+          style={[styles.templateButton, { borderColor: colors.primary + '50', backgroundColor: colors.card }]}
+          onPress={() => setShowTemplatePicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Fill from template"
+        >
+          <Icon name="file-document-outline" size={18} color={colors.primary} />
+          <Text style={[styles.templateButtonText, { color: colors.primary }]}>From Template</Text>
+        </TouchableOpacity>
+      )}
+
       <TransactionForm
+        key={templateValues ? `tmpl-${Date.now()}` : 'default'}
         initialValues={initialValues}
         categories={allCategories}
         wallets={wallets}
@@ -135,6 +171,33 @@ export default function AddEditTransactionScreen({ navigation, route }) {
         isLoading={isSubmitting}
         submitLabel={isEditMode ? 'Update Transaction' : 'Add Transaction'}
       />
+
+      {/* Template Picker Modal */}
+      <Modal visible={showTemplatePicker} transparent animationType="slide" onRequestClose={() => setShowTemplatePicker(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowTemplatePicker(false)}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Template</Text>
+            <FlatList
+              data={templates}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.templateItem}
+                  onPress={() => handleTemplateSelect(item)}
+                >
+                  <View style={[styles.templateDot, { backgroundColor: item.type === 'income' ? colors.income : colors.expense }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[{ color: colors.textPrimary, fontSize: 15, fontWeight: '500' }]}>{item.name}</Text>
+                    <Text style={[{ color: colors.textSecondary, fontSize: 12 }]}>
+                      {item.type} {item.amount ? `• ₱${item.amount}` : ''}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -147,5 +210,51 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  templateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    borderStyle: 'dashed',
+    gap: 6,
+  },
+  templateButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalContent: {
+    maxHeight: '50%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 24,
+    paddingTop: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  templateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  templateDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 12,
   },
 });

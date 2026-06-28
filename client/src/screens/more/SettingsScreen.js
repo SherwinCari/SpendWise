@@ -1,5 +1,5 @@
 /**
- * SpendWise Settings Screen
+ * Quorax Settings Screen
  * - Dark mode toggle
  * - User profile section
  * - Logout / Delete account
@@ -7,7 +7,7 @@
  * - App version info
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,11 +16,14 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
+  Modal,
+  FlatList,
 } from 'react-native';
 import Constants from 'expo-constants';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useCurrency, SUPPORTED_CURRENCIES } from '../../utils/currency';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Avatar from '../../components/common/Avatar';
@@ -28,7 +31,9 @@ import Avatar from '../../components/common/Avatar';
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme, spacing } = useTheme();
   const { user, logout, deleteAccount, loading } = useAuth();
+  const { currency, setCurrency } = useCurrency();
   const navigation = useNavigation();
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   const appVersion =
     Constants.expoConfig?.version || Constants.manifest?.version || '1.0.0';
@@ -91,7 +96,7 @@ export default function SettingsScreen() {
           <Avatar name={user?.name} size={56} />
           <View style={[styles.profileInfo, { marginLeft: spacing.base }]}>
             <Text style={[styles.profileName, { color: colors.textPrimary }]} numberOfLines={1}>
-              {user?.name || 'SpendWise User'}
+              {user?.name || 'Quorax User'}
             </Text>
             <Text style={[styles.profileEmail, { color: colors.textSecondary }]} numberOfLines={1}>
               {user?.email || 'No email'}
@@ -127,7 +132,43 @@ export default function SettingsScreen() {
         Account
       </Text>
       <Card style={styles.section}>
+        <TouchableOpacity
+          style={[styles.settingRow, { marginBottom: spacing.sm }]}
+          onPress={() => navigation.navigate('ChangePassword')}
+          accessibilityRole="button"
+        >
+          <View style={styles.settingLabel}>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Change Password</Text>
+            <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>
+              Update your account password via email verification
+            </Text>
+          </View>
+          <Text style={[{ color: colors.primary, fontSize: 18 }]}>›</Text>
+        </TouchableOpacity>
         <Button title="Log Out" variant="danger" onPress={handleLogout} loading={loading} />
+      </Card>
+
+      {/* Preferences Section */}
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: spacing.lg }]}>
+        Preferences
+      </Text>
+      <Card style={styles.section}>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => setShowCurrencyPicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Select currency"
+        >
+          <View style={styles.settingLabel}>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Currency</Text>
+            <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>
+              Choose your preferred display currency
+            </Text>
+          </View>
+          <Text style={[{ color: colors.primary, fontSize: 16, fontWeight: '500' }]}>
+            {SUPPORTED_CURRENCIES.find(c => c.code === currency)?.symbol || '₱'} {currency}
+          </Text>
+        </TouchableOpacity>
       </Card>
 
       {/* Danger Zone */}
@@ -152,7 +193,7 @@ export default function SettingsScreen() {
         </View>
         <View style={[styles.infoRow, { marginTop: spacing.sm }]}>
           <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>App Name</Text>
-          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>SpendWise</Text>
+          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>Quorax</Text>
         </View>
         <TouchableOpacity
           style={[styles.infoRow, { marginTop: spacing.md }]}
@@ -163,6 +204,32 @@ export default function SettingsScreen() {
           <Text style={[{ color: colors.primary, fontSize: 16 }]}>›</Text>
         </TouchableOpacity>
       </Card>
+
+      {/* Currency Picker Modal */}
+      <Modal visible={showCurrencyPicker} transparent animationType="slide" onRequestClose={() => setShowCurrencyPicker(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowCurrencyPicker(false)}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Currency</Text>
+            <FlatList
+              data={SUPPORTED_CURRENCIES}
+              keyExtractor={(item) => item.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.currencyItem, currency === item.code && { backgroundColor: colors.primary + '10' }]}
+                  onPress={() => { setCurrency(item.code); setShowCurrencyPicker(false); }}
+                >
+                  <Text style={[styles.currencySymbol, { color: colors.textPrimary }]}>{item.symbol}</Text>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[{ color: colors.textPrimary, fontSize: 15, fontWeight: '500' }]}>{item.code}</Text>
+                    <Text style={[{ color: colors.textSecondary, fontSize: 13 }]}>{item.name}</Text>
+                  </View>
+                  {currency === item.code && <Text style={{ color: colors.primary, fontSize: 18 }}>✓</Text>}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -183,4 +250,9 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   infoLabel: { fontSize: 14 },
   infoValue: { fontSize: 14, fontWeight: '500' },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
+  modalContent: { maxHeight: '50%', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 24, paddingTop: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '600', textAlign: 'center', marginBottom: 12 },
+  currencyItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 8 },
+  currencySymbol: { fontSize: 20, fontWeight: '600', width: 30, textAlign: 'center' },
 });

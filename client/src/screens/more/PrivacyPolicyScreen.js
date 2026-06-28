@@ -1,6 +1,6 @@
 /**
  * Privacy Policy Screen
- * Displays the SpendWise privacy policy.
+ * Displays the Quorax privacy policy.
  */
 
 import React from 'react';
@@ -24,7 +24,7 @@ export default function PrivacyPolicyScreen() {
       </Text>
 
       <Section title="1. Information We Collect" colors={colors}>
-        SpendWise collects the following information when you use our app:{'\n\n'}
+        Quorax collects the following information when you use our app:{'\n\n'}
         • <Text style={styles.bold}>Account Information:</Text> Name, email address, and encrypted password when you register.{'\n'}
         • <Text style={styles.bold}>Financial Data:</Text> Transaction records, wallet balances, budget limits, and categories you create.{'\n'}
         • <Text style={styles.bold}>Device Information:</Text> Device type and operating system for app performance optimization.
@@ -32,7 +32,7 @@ export default function PrivacyPolicyScreen() {
 
       <Section title="2. How We Use Your Information" colors={colors}>
         We use your information to:{'\n\n'}
-        • Provide and maintain the SpendWise service{'\n'}
+        • Provide and maintain the Quorax service{'\n'}
         • Track your income, expenses, and budgets{'\n'}
         • Generate financial reports and analytics{'\n'}
         • Send budget alerts and notifications{'\n'}

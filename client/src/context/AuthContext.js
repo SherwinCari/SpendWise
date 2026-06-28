@@ -26,7 +26,8 @@ export const useAuth = () => {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true); // Only for initial auth restore
+  const [loading, setLoading] = useState(false); // For login/register actions (does NOT affect navigation)
   const [error, setError] = useState(null);
 
   // Session timeout (Feature #3)
@@ -112,7 +113,7 @@ export function AuthProvider({ children }) {
       } catch {
         // Token check failed — user stays unauthenticated
       } finally {
-        setLoading(false);
+        setInitializing(false);
       }
     };
     restoreAuth();
@@ -212,6 +213,7 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     isAuthenticated,
+    initializing,
     loading,
     error,
     login,

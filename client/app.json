@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Quoarax - Finance Tracker",
+    "name": "Quorax - Finance Tracker",
     "slug": "client",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "scheme": "spendwise",
     "icon": "./assets/icon.png",
@@ -35,8 +35,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "SpendWise needs access to your photos to attach receipts to transactions.",
-          "cameraPermission": "SpendWise needs access to your camera to photograph receipts."
+          "photosPermission": "Quorax needs access to your photos to attach receipts to transactions.",
+          "cameraPermission": "Quorax needs access to your camera to photograph receipts."
         }
       ],
       [

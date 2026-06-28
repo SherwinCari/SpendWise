@@ -9,6 +9,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
+import { useCurrency, formatCurrency } from '../../utils/currency';
 
 /**
  * @param {object} props
@@ -18,6 +19,7 @@ import { useTheme } from '../../theme';
  */
 export default function TransactionCard({ transaction, onPress, onDelete }) {
   const { colors, spacing, borderRadius, shadows, fontSize, fontWeight } = useTheme();
+  const { currency } = useCurrency();
 
   const {
     amount,
@@ -33,7 +35,7 @@ export default function TransactionCard({ transaction, onPress, onDelete }) {
   const isIncome = type === 'income';
   const amountColor = isIncome ? colors.income : colors.expense;
   const amountPrefix = isIncome ? '+' : '-';
-  const formattedAmount = `${amountPrefix}₱${parseFloat(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formattedAmount = `${amountPrefix}${formatCurrency(amount, currency)}`;
   const formattedDate = formatDate(date);
   const iconName = categoryIcon || (isIncome ? 'arrow-down-circle' : 'arrow-up-circle');
   const iconColor = categoryColor || colors.primary;

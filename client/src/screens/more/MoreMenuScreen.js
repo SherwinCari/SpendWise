@@ -52,6 +52,12 @@ const MENU_ITEMS = [
     description: 'Set and track savings targets',
   },
   {
+    key: 'TransactionTemplates',
+    icon: 'file-document-outline',
+    label: 'Templates',
+    description: 'Quick-fill frequent transactions',
+  },
+  {
     key: 'Notifications',
     icon: 'bell-outline',
     label: 'Notifications',
@@ -103,7 +109,7 @@ export default function MoreMenuScreen({ navigation }) {
               style={[styles.profileName, { color: colors.textPrimary }]}
               numberOfLines={1}
             >
-              {user?.name || 'SpendWise User'}
+              {user?.name || 'Quorax User'}
             </Text>
             <Text
               style={[styles.profileEmail, { color: colors.textSecondary }]}

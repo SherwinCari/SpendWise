@@ -199,6 +199,14 @@ export default function TransactionListScreen({ navigation }) {
       <View style={styles.headerActions}>
         <TouchableOpacity
           style={styles.exportButton}
+          onPress={() => navigation.navigate('CalendarView')}
+          accessibilityRole="button"
+          accessibilityLabel="View calendar"
+        >
+          <Icon name="calendar-month" size={20} color={colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.exportButton}
           onPress={handleExportCSV}
           accessibilityRole="button"
           accessibilityLabel="Export transactions to CSV"
@@ -212,7 +220,7 @@ export default function TransactionListScreen({ navigation }) {
         categories={allCategories}
       />
     </View>
-  ), [filters, handleFilterChange, allCategories, handleExportCSV, colors.primary]);
+  ), [filters, handleFilterChange, allCategories, handleExportCSV, colors.primary, navigation]);
 
   // Show full-screen loader on initial load
   if (initialLoad && loading) {
@@ -277,6 +285,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingHorizontal: 16,
     paddingTop: 8,
+    gap: 4,
   },
   exportButton: {
     padding: 8,

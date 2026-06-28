@@ -27,7 +27,7 @@ import { View, Text, StyleSheet } from 'react-native';
 export function BalanceWidgetComponent({ totalBalance = 0, todaySpending = 0 }) {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>SpendWise</Text>
+      <Text style={styles.title}>Quorax</Text>
       <Text style={styles.balanceLabel}>Total Balance</Text>
       <Text style={styles.balanceAmount}>
         ₱{parseFloat(totalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -58,7 +58,7 @@ export function BalanceWidgetComponent({ totalBalance = 0, todaySpending = 0 }) 
 
 // Widget configuration for Android
 export const WIDGET_CONFIG = {
-  name: 'SpendWise Balance',
+  name: 'Quorax Balance',
   description: 'Shows your total balance and today\'s spending',
   minWidth: '250dp',
   minHeight: '100dp',

@@ -9,6 +9,8 @@ import PrivacyPolicyScreen from '../screens/more/PrivacyPolicyScreen';
 import RecurringTransactionsScreen from '../screens/more/RecurringTransactionsScreen';
 import BillRemindersScreen from '../screens/more/BillRemindersScreen';
 import SavingsGoalsScreen from '../screens/more/SavingsGoalsScreen';
+import TransactionTemplatesScreen from '../screens/more/TransactionTemplatesScreen';
+import ChangePasswordScreen from '../screens/more/ChangePasswordScreen';
 import { useTheme } from '../theme/ThemeContext';
 
 const Stack = createStackNavigator();
@@ -71,6 +73,16 @@ export default function MoreStack() {
         name="SavingsGoals"
         component={SavingsGoalsScreen}
         options={{ title: 'Savings Goals' }}
+      />
+      <Stack.Screen
+        name="TransactionTemplates"
+        component={TransactionTemplatesScreen}
+        options={{ title: 'Templates' }}
+      />
+      <Stack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{ title: 'Change Password' }}
       />
     </Stack.Navigator>
   );

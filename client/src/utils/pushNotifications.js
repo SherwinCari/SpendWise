@@ -44,7 +44,7 @@ export async function requestNotificationPermissions() {
   // Set up Android notification channel
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'SpendWise',
+      name: 'Quorax',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#0D9488',
