@@ -14,6 +14,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Image,
 } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
@@ -237,6 +238,25 @@ export default function TransactionDetailsScreen({ route, navigation }) {
           ) : null}
         </Card>
 
+        {/* Receipt Image */}
+        {transaction.receipt_image || transaction.receiptImage ? (
+          <Card style={{ marginBottom: spacing.base }}>
+            <View style={{ paddingVertical: spacing.sm }}>
+              <View style={[styles.detailRow, { paddingVertical: spacing.xs, borderBottomWidth: 0 }]}>
+                <View style={[styles.detailIcon, { marginRight: spacing.md }]}>
+                  <Icon name="camera" size={20} color={colors.textSecondary} />
+                </View>
+                <Text style={[typography.label, { color: colors.textSecondary }]}>Receipt</Text>
+              </View>
+              <Image
+                source={{ uri: transaction.receipt_image || transaction.receiptImage }}
+                style={styles.receiptImage}
+                resizeMode="cover"
+              />
+            </View>
+          </Card>
+        ) : null}
+
         {/* Action Buttons */}
         <View style={[styles.actions, { marginTop: spacing.md }]}>
           <Button
@@ -363,6 +383,12 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  receiptImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    marginTop: 8,
   },
   actions: {},
 });

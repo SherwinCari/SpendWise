@@ -162,7 +162,7 @@ export default function AddEditTransactionScreen({ navigation, route }) {
       )}
 
       <TransactionForm
-        key={templateValues ? `tmpl-${Date.now()}` : 'default'}
+        key={templateValues ? `tmpl-${Date.now()}` : `${transactionType}-${existingTransaction?.id || 'new'}`}
         initialValues={initialValues}
         categories={allCategories}
         wallets={wallets}

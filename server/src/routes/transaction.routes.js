@@ -18,7 +18,7 @@ const router = Router();
  */
 router.post('/', authenticate, validate(createTransactionSchema), async (req, res, next) => {
   try {
-    const { amount, type, category_id, wallet_id, date, description } = req.body;
+    const { amount, type, category_id, wallet_id, date, description, receipt_image } = req.body;
 
     const transaction = await transactionService.create(req.userId, {
       amount,
@@ -27,6 +27,7 @@ router.post('/', authenticate, validate(createTransactionSchema), async (req, re
       walletId: wallet_id,
       date,
       description,
+      receiptImage: receipt_image || null,
     });
 
     res.status(201).json({
@@ -141,7 +142,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
  */
 router.put('/:id', authenticate, validate(updateTransactionSchema), async (req, res, next) => {
   try {
-    const { amount, type, category_id, wallet_id, date, description } = req.body;
+    const { amount, type, category_id, wallet_id, date, description, receipt_image } = req.body;
 
     const updates = {};
     if (amount !== undefined) updates.amount = amount;
@@ -150,6 +151,7 @@ router.put('/:id', authenticate, validate(updateTransactionSchema), async (req, 
     if (wallet_id !== undefined) updates.walletId = wallet_id;
     if (date !== undefined) updates.date = date;
     if (description !== undefined) updates.description = description;
+    if (receipt_image !== undefined) updates.receiptImage = receipt_image;
 
     const transaction = await transactionService.update(req.userId, req.params.id, updates);
 

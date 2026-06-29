@@ -19,8 +19,8 @@ async function create(fields) {
   const id = uuidv4();
   const now = new Date().toISOString();
   const result = await query(
-    `INSERT INTO transactions (id, user_id, wallet_id, category_id, type, amount, description, date, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+    `INSERT INTO transactions (id, user_id, wallet_id, category_id, type, amount, description, date, receipt_image, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
      RETURNING *`,
     [
       id,
@@ -31,6 +31,7 @@ async function create(fields) {
       fields.amount,
       fields.description || null,
       fields.date,
+      fields.receiptImage || null,
       now,
     ]
   );
@@ -140,6 +141,7 @@ async function update(id, fields) {
     amount: 'amount',
     description: 'description',
     date: 'date',
+    receiptImage: 'receipt_image',
   };
 
   for (const [jsKey, dbColumn] of Object.entries(fieldMap)) {

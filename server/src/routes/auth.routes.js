@@ -199,6 +199,58 @@ router.delete('/account', authenticate, async (req, res, next) => {
 // In-memory store for password change codes
 const passwordChangeCodes = new Map();
 
+// In-memory store for password change daily limits (2 per user per day)
+const passwordChangeLimits = new Map();
+
+/**
+ * Check if a user has exceeded daily password change limit (2 per day).
+ * @param {string} userId
+ * @returns {{ allowed: boolean, remaining: number }}
+ */
+function checkPasswordChangeLimit(userId) {
+  const record = passwordChangeLimits.get(userId);
+  const now = Date.now();
+
+  if (!record || now > record.resetsAt) {
+    return { allowed: true, remaining: 2 };
+  }
+
+  if (record.count >= 2) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  return { allowed: true, remaining: 2 - record.count };
+}
+
+/**
+ * Record a password change attempt for the user.
+ * @param {string} userId
+ */
+function recordPasswordChange(userId) {
+  const now = Date.now();
+  const record = passwordChangeLimits.get(userId);
+
+  // Reset if expired
+  if (!record || now > record.resetsAt) {
+    const resetsAt = now + 24 * 60 * 60 * 1000; // 24 hours from now
+    passwordChangeLimits.set(userId, { count: 1, resetsAt });
+    return;
+  }
+
+  record.count += 1;
+  passwordChangeLimits.set(userId, record);
+}
+
+// Clean up expired password change limits every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, data] of passwordChangeLimits.entries()) {
+    if (now > data.resetsAt) {
+      passwordChangeLimits.delete(key);
+    }
+  }
+}, 60 * 60 * 1000);
+
 /**
  * POST /api/auth/request-password-change
  * Authenticated user requests a password change.
@@ -212,6 +264,18 @@ router.post('/request-password-change', authenticate, authRateLimiter, async (re
       return res.status(400).json({
         success: false,
         error: { code: 'VALIDATION_ERROR', message: 'New password must be at least 8 characters' },
+      });
+    }
+
+    // Check daily password change limit (2 per day)
+    const limitCheck = checkPasswordChangeLimit(req.userId);
+    if (!limitCheck.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: {
+          code: 'PASSWORD_CHANGE_LIMIT',
+          message: 'You can only change your password 2 times per day. Please try again tomorrow.',
+        },
       });
     }
 
@@ -293,6 +357,9 @@ router.post('/confirm-password-change', authenticate, authRateLimiter, async (re
     const passwordHash = await bcrypt.hash(newPassword, rounds);
 
     await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, req.userId]);
+
+    // Record this password change against the daily limit
+    recordPasswordChange(req.userId);
 
     // Clean up
     passwordChangeCodes.delete(req.userId);

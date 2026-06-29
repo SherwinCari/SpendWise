@@ -27,6 +27,7 @@ const createTransactionSchema = Joi.object({
     'any.required': 'Date is required',
   }),
   description: Joi.string().allow('', null).optional(),
+  receipt_image: Joi.string().allow('', null).optional(),
 });
 
 const updateTransactionSchema = Joi.object({
@@ -48,6 +49,7 @@ const updateTransactionSchema = Joi.object({
     'date.base': 'Date must be a valid ISO date',
   }),
   description: Joi.string().allow('', null).optional(),
+  receipt_image: Joi.string().allow('', null).optional(),
 });
 
 module.exports = { createTransactionSchema, updateTransactionSchema };

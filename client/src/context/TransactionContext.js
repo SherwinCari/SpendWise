@@ -36,9 +36,11 @@ function toApiPayload(data) {
   if (data.walletId !== undefined) payload.wallet_id = data.walletId;
   if (data.date !== undefined) payload.date = data.date;
   if (data.description !== undefined) payload.description = data.description;
+  if (data.receiptImage !== undefined) payload.receipt_image = data.receiptImage;
   // Also pass through any fields already in snake_case
   if (data.category_id !== undefined) payload.category_id = data.category_id;
   if (data.wallet_id !== undefined) payload.wallet_id = data.wallet_id;
+  if (data.receipt_image !== undefined) payload.receipt_image = data.receipt_image;
   return payload;
 }
 

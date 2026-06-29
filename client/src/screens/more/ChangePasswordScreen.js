@@ -88,11 +88,17 @@ export default function ChangePasswordScreen({ navigation }) {
         <Text style={[styles.heading, { color: colors.textPrimary }]}>
           {step === 1 ? 'Set New Password' : 'Enter Verification Code'}
         </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: spacing.lg }]}>
+        <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: spacing.md }]}>
           {step === 1
             ? 'Enter your new password. We\'ll send a verification code to your email.'
             : `Enter the 6-digit code sent to ${user?.email}.`}
         </Text>
+
+        <View style={[styles.warningBox, { backgroundColor: colors.card, borderColor: '#F59E0B', marginBottom: spacing.lg }]}>
+          <Text style={[styles.warningText, { color: '#F59E0B' }]}>
+            ⚠️ You can only change your password 2 times per day.
+          </Text>
+        </View>
 
         {step === 1 ? (
           <>
@@ -149,4 +155,15 @@ const styles = StyleSheet.create({
   heading: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
   subtitle: { fontSize: 14, lineHeight: 20 },
   error: { textAlign: 'center', marginBottom: 8 },
+  warningBox: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  warningText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

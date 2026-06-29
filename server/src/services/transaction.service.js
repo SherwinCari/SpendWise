@@ -30,7 +30,7 @@ const {
  * @returns {Promise<object>} The created transaction
  */
 async function create(userId, fields) {
-  const { amount, type, categoryId, description, date, walletId } = fields;
+  const { amount, type, categoryId, description, date, walletId, receiptImage } = fields;
 
   // Validate required fields
   const missingFields = [];
@@ -74,6 +74,7 @@ async function create(userId, fields) {
     amount: parsedAmount,
     description: description || null,
     date,
+    receiptImage: receiptImage || null,
   });
 
   // If expense, update budget tracking for matching budgets

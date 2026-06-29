@@ -101,6 +101,7 @@ export default function TransactionForm({
       walletId,
       date,
       description: description.trim() || null,
+      receiptImage: receiptImage || null,
     });
   }
 
