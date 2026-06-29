@@ -2,22 +2,16 @@
 
 /**
  * Email Service
- * Uses nodemailer with SMTP for sending transactional emails.
- * Configured via environment variables.
+ * Uses Resend API for sending transactional emails.
+ * Much faster and more reliable than SMTP - no port blocking issues.
+ * 
+ * Get your API key at: https://resend.com
+ * Free tier: 100 emails/day
  */
 
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Create reusable transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT, 10) || 587,
-  secure: parseInt(process.env.SMTP_PORT, 10) === 465,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
  * Send a verification code email for password change.
@@ -26,11 +20,11 @@ const transporter = nodemailer.createTransport({
  * @returns {Promise<void>}
  */
 async function sendPasswordChangeCode(toEmail, code) {
-  const from = process.env.SMTP_FROM || '"Quorax" <noreply@quorax.app>';
+  const from = process.env.EMAIL_FROM || 'Quorax <onboarding@resend.dev>';
 
-  const mailOptions = {
+  const { data, error } = await resend.emails.send({
     from,
-    to: toEmail,
+    to: [toEmail],
     subject: 'Quorax - Password Change Verification Code',
     html: `
       <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px;">
@@ -46,9 +40,14 @@ async function sendPasswordChangeCode(toEmail, code) {
       </div>
     `,
     text: `Your Quorax password change code is: ${code}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, please ignore this email.`,
-  };
+  });
 
-  await transporter.sendMail(mailOptions);
+  if (error) {
+    console.error('[EMAIL] Failed to send:', error);
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
+
+  console.log('[EMAIL] Sent successfully:', data.id);
 }
 
 module.exports = {
