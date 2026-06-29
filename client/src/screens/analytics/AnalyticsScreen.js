@@ -75,10 +75,13 @@ export default function AnalyticsScreen() {
     setSummaryError(null);
     try {
       const response = await getMonthlySummary(selectedYear, selectedMonth);
-      // Server returns { success: true, totalIncome, totalExpenses, netBalance }
-      // (data spread directly into response body)
+      // Server returns { success, year, month, totalIncome, totalExpenses, netBalance }
       const respData = response.data;
-      setSummary(respData?.data || respData);
+      setSummary({
+        totalIncome: respData.totalIncome || '0',
+        totalExpenses: respData.totalExpenses || '0',
+        netBalance: respData.netBalance || '0',
+      });
     } catch (error) {
       setSummaryError('Failed to load monthly summary');
     } finally {
@@ -135,8 +138,17 @@ export default function AnalyticsScreen() {
     if (selectedMonth === 1) {
       setSelectedMonth(12);
       setSelectedYear(selectedYear - 1);
+      // Update breakdown range to match
+      const start = new Date(selectedYear - 1, 11, 1);
+      const end = new Date(selectedYear - 1, 11 + 1, 0);
+      setBreakdownStartDate(start.toISOString().split('T')[0]);
+      setBreakdownEndDate(end.toISOString().split('T')[0]);
     } else {
       setSelectedMonth(selectedMonth - 1);
+      const start = new Date(selectedYear, selectedMonth - 2, 1);
+      const end = new Date(selectedYear, selectedMonth - 1, 0);
+      setBreakdownStartDate(start.toISOString().split('T')[0]);
+      setBreakdownEndDate(end.toISOString().split('T')[0]);
     }
   };
 
@@ -144,8 +156,16 @@ export default function AnalyticsScreen() {
     if (selectedMonth === 12) {
       setSelectedMonth(1);
       setSelectedYear(selectedYear + 1);
+      const start = new Date(selectedYear + 1, 0, 1);
+      const end = new Date(selectedYear + 1, 1, 0);
+      setBreakdownStartDate(start.toISOString().split('T')[0]);
+      setBreakdownEndDate(end.toISOString().split('T')[0]);
     } else {
       setSelectedMonth(selectedMonth + 1);
+      const start = new Date(selectedYear, selectedMonth, 1);
+      const end = new Date(selectedYear, selectedMonth + 1, 0);
+      setBreakdownStartDate(start.toISOString().split('T')[0]);
+      setBreakdownEndDate(end.toISOString().split('T')[0]);
     }
   };
 
@@ -415,12 +435,21 @@ export default function AnalyticsScreen() {
 
       {/* Generate Monthly Report (Feature #24) */}
       <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+          Monthly Report
+        </Text>
+        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+          Generate a summary of {MONTHS[selectedMonth - 1]} {selectedYear}
+        </Text>
         <TouchableOpacity
           style={[styles.reportButton, { backgroundColor: colors.primary, borderRadius: 8 }]}
           onPress={async () => {
             try {
               const response = await apiClient.post('/notifications/monthly-summary');
-              Alert.alert('Report Generated', response.data?.data?.message || 'Monthly summary notification created!');
+              Alert.alert(
+                '📊 Report Generated',
+                response.data?.data?.message || 'Monthly summary notification created! Check your notifications.',
+              );
             } catch (err) {
               Alert.alert('Error', err.response?.data?.error?.message || 'Failed to generate report.');
             }

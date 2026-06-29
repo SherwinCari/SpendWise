@@ -3,30 +3,27 @@
 const transactionRepository = require('../repositories/transaction.repository');
 const walletService = require('./wallet.service');
 const budgetRepository = require('../repositories/budget.repository');
-const { getClient } = require('../config/database');
+const { getClient, query } = require('../config/database');
 const { serialize, deserialize } = require('../utils/serializer');
 const { parsePagination } = require('../utils/pagination');
 const {
   AuthorizationError,
   NotFoundError,
   ValidationError,
+  InsufficientFundsError,
 } = require('../utils/errors');
 
 /**
  * Create a new transaction.
- * Within a DB transaction:
- * 1. Creates the transaction record
- * 2. Adjusts the wallet balance (income adds, expense subtracts)
- * 3. If expense, updates budget tracking for matching category budgets
+ * Executes atomically within a DB transaction:
+ * 1. Locks wallet row with SELECT FOR UPDATE
+ * 2. Validates sufficient funds for expenses
+ * 3. Adjusts wallet balance
+ * 4. Creates the transaction record
+ * 5. Updates budget tracking if expense
  *
  * @param {string} userId - The authenticated user's ID
  * @param {object} fields - Transaction fields
- * @param {number|string} fields.amount - Transaction amount (must be > 0)
- * @param {string} fields.type - 'income' or 'expense'
- * @param {string} fields.categoryId - Category ID
- * @param {string} [fields.description] - Optional description
- * @param {string|Date} fields.date - Transaction date
- * @param {string} fields.walletId - Wallet ID
  * @returns {Promise<object>} The created transaction
  */
 async function create(userId, fields) {
@@ -62,27 +59,62 @@ async function create(userId, fields) {
     ]);
   }
 
-  // Adjust wallet balance (will throw InsufficientFundsError if needed)
-  await walletService.adjustBalance(walletId, parsedAmount, type);
+  // Execute atomically
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
 
-  // Create transaction record
-  const transaction = await transactionRepository.create({
-    userId,
-    walletId,
-    categoryId,
-    type,
-    amount: parsedAmount,
-    description: description || null,
-    date,
-    receiptImage: receiptImage || null,
-  });
+    // Lock wallet row to prevent concurrent balance modifications
+    const walletResult = await client.query(
+      'SELECT id, balance FROM wallets WHERE id = $1 FOR UPDATE',
+      [walletId]
+    );
+    const wallet = walletResult.rows[0];
+    if (!wallet) {
+      throw new NotFoundError('Wallet not found');
+    }
 
-  // If expense, update budget tracking for matching budgets
-  if (type === 'expense') {
-    await _updateBudgetTrackingOnCreate(userId, categoryId, parsedAmount);
+    const currentBalance = parseFloat(wallet.balance);
+    let newBalance;
+
+    if (type === 'income') {
+      newBalance = currentBalance + parsedAmount;
+    } else {
+      newBalance = currentBalance - parsedAmount;
+      if (newBalance < 0) {
+        throw new InsufficientFundsError('Insufficient funds: wallet balance cannot be negative');
+      }
+    }
+
+    // Update wallet balance
+    await client.query('UPDATE wallets SET balance = $1 WHERE id = $2', [newBalance, walletId]);
+
+    // Create transaction record
+    const transaction = await transactionRepository.create({
+      userId,
+      walletId,
+      categoryId,
+      type,
+      amount: parsedAmount,
+      description: description || null,
+      date,
+      receiptImage: receiptImage || null,
+    });
+
+    await client.query('COMMIT');
+
+    // Update budget tracking outside transaction (non-critical)
+    if (type === 'expense') {
+      _updateBudgetTrackingOnCreate(userId, categoryId, parsedAmount).catch(() => {});
+    }
+
+    return transaction;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
-
-  return transaction;
 }
 
 /**
@@ -148,7 +180,7 @@ async function list(userId, filters = {}) {
 
 /**
  * Update an existing transaction.
- * Handles wallet balance recalculation and budget tracking adjustments.
+ * Handles wallet balance recalculation and budget tracking adjustments atomically.
  *
  * @param {string} userId - The authenticated user's ID
  * @param {string} transactionId - The transaction ID to update
@@ -193,55 +225,95 @@ async function update(userId, transactionId, updates) {
   const oldWalletId = existing.wallet_id;
 
   const newAmount = updates.amount !== undefined ? parseFloat(updates.amount) : oldAmount;
-  const newType = updates.type || oldType;
-  const newCategoryId = updates.categoryId || oldCategoryId;
-  const newWalletId = updates.walletId || oldWalletId;
+  const newType = updates.type !== undefined ? updates.type : oldType;
+  const newCategoryId = updates.categoryId !== undefined ? updates.categoryId : oldCategoryId;
+  const newWalletId = updates.walletId !== undefined ? updates.walletId : oldWalletId;
 
   // Recalculate wallet balance if amount, type, or wallet changed
   const amountChanged = newAmount !== oldAmount;
   const typeChanged = newType !== oldType;
   const walletChanged = newWalletId !== oldWalletId;
 
-  if (amountChanged || typeChanged || walletChanged) {
-    // Reverse old impact on old wallet
-    const reverseType = oldType === 'income' ? 'expense' : 'income';
-    await walletService.adjustBalance(oldWalletId, oldAmount, reverseType);
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
 
-    // Apply new impact on new (or same) wallet
-    await walletService.adjustBalance(newWalletId, newAmount, newType);
+    if (amountChanged || typeChanged || walletChanged) {
+      // Lock both wallets (old and new) to prevent concurrent modifications
+      const walletIds = [oldWalletId];
+      if (walletChanged) walletIds.push(newWalletId);
+
+      // Lock in consistent order to prevent deadlocks
+      const sortedIds = [...new Set(walletIds)].sort();
+      for (const wId of sortedIds) {
+        await client.query('SELECT id FROM wallets WHERE id = $1 FOR UPDATE', [wId]);
+      }
+
+      // Reverse old impact on old wallet
+      const oldWalletResult = await client.query('SELECT balance FROM wallets WHERE id = $1', [oldWalletId]);
+      let oldWalletBalance = parseFloat(oldWalletResult.rows[0].balance);
+      if (oldType === 'income') {
+        oldWalletBalance -= oldAmount;
+      } else {
+        oldWalletBalance += oldAmount;
+      }
+      await client.query('UPDATE wallets SET balance = $1 WHERE id = $2', [oldWalletBalance, oldWalletId]);
+
+      // Apply new impact on new (or same) wallet
+      let targetBalance;
+      if (walletChanged) {
+        const newWalletResult = await client.query('SELECT balance FROM wallets WHERE id = $1', [newWalletId]);
+        targetBalance = parseFloat(newWalletResult.rows[0].balance);
+      } else {
+        targetBalance = oldWalletBalance;
+      }
+
+      if (newType === 'income') {
+        targetBalance += newAmount;
+      } else {
+        targetBalance -= newAmount;
+        if (targetBalance < 0) {
+          throw new InsufficientFundsError('Insufficient funds: wallet balance cannot be negative');
+        }
+      }
+      await client.query('UPDATE wallets SET balance = $1 WHERE id = $2', [targetBalance, newWalletId]);
+    }
+
+    // Perform the update
+    const updated = await transactionRepository.update(transactionId, updates);
+
+    await client.query('COMMIT');
+
+    // Budget tracking adjustments (non-critical, outside transaction)
+    const categoryChanged = newCategoryId !== oldCategoryId;
+    if (categoryChanged) {
+      if (oldType === 'expense') {
+        _updateBudgetTrackingOnDelete(userId, oldCategoryId, oldAmount).catch(() => {});
+      }
+      if (newType === 'expense') {
+        _updateBudgetTrackingOnCreate(userId, newCategoryId, newAmount).catch(() => {});
+      }
+    } else if ((amountChanged || typeChanged) && !categoryChanged) {
+      if (oldType === 'expense') {
+        _updateBudgetTrackingOnDelete(userId, oldCategoryId, oldAmount).catch(() => {});
+      }
+      if (newType === 'expense') {
+        _updateBudgetTrackingOnCreate(userId, newCategoryId, newAmount).catch(() => {});
+      }
+    }
+
+    return updated;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
-
-  // Recalculate budget tracking if category changed and involves expense
-  const categoryChanged = newCategoryId !== oldCategoryId;
-
-  if (categoryChanged) {
-    // If old transaction was expense, subtract from old category's budget tracking
-    if (oldType === 'expense') {
-      await _updateBudgetTrackingOnDelete(userId, oldCategoryId, oldAmount);
-    }
-
-    // If new transaction is expense, add to new category's budget tracking
-    if (newType === 'expense') {
-      await _updateBudgetTrackingOnCreate(userId, newCategoryId, newAmount);
-    }
-  } else if ((amountChanged || typeChanged) && !categoryChanged) {
-    // Same category but amount/type changed — adjust budget tracking
-    if (oldType === 'expense') {
-      await _updateBudgetTrackingOnDelete(userId, oldCategoryId, oldAmount);
-    }
-    if (newType === 'expense') {
-      await _updateBudgetTrackingOnCreate(userId, newCategoryId, newAmount);
-    }
-  }
-
-  // Perform the update
-  const updated = await transactionRepository.update(transactionId, updates);
-  return updated;
 }
 
 /**
  * Delete a transaction.
- * Reverses wallet balance impact and budget tracking.
+ * Reverses wallet balance impact atomically and updates budget tracking.
  *
  * @param {string} userId - The authenticated user's ID
  * @param {string} transactionId - The transaction ID to delete
@@ -266,18 +338,43 @@ async function deleteTransaction(userId, transactionId) {
   const categoryId = existing.category_id;
   const walletId = existing.wallet_id;
 
-  // Reverse wallet balance: expense → add back, income → subtract
-  const reverseType = type === 'income' ? 'expense' : 'income';
-  await walletService.adjustBalance(walletId, amount, reverseType);
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
 
-  // If was expense, reverse budget tracking (subtract from spent)
-  if (type === 'expense') {
-    await _updateBudgetTrackingOnDelete(userId, categoryId, amount);
+    // Lock wallet row
+    const walletResult = await client.query(
+      'SELECT balance FROM wallets WHERE id = $1 FOR UPDATE',
+      [walletId]
+    );
+    let balance = parseFloat(walletResult.rows[0].balance);
+
+    // Reverse: expense → add back, income → subtract
+    if (type === 'income') {
+      balance -= amount;
+    } else {
+      balance += amount;
+    }
+
+    await client.query('UPDATE wallets SET balance = $1 WHERE id = $2', [balance, walletId]);
+
+    // Delete the transaction record
+    const deleted = await transactionRepository.delete(transactionId);
+
+    await client.query('COMMIT');
+
+    // If was expense, reverse budget tracking (non-critical)
+    if (type === 'expense') {
+      _updateBudgetTrackingOnDelete(userId, categoryId, amount).catch(() => {});
+    }
+
+    return deleted;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
-
-  // Delete the transaction record
-  const deleted = await transactionRepository.delete(transactionId);
-  return deleted;
 }
 
 // ============================================================

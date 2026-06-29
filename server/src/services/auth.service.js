@@ -7,52 +7,8 @@ const { generateAccessToken, generateRefreshToken, verifyToken, jwtConfig } = re
 const userRepository = require('../repositories/user.repository');
 const { DuplicateError, AuthenticationError } = require('../utils/errors');
 
-// ─── Account Lockout (Feature #7) ───────────────────────────────────────────
-// Track failed login attempts per email in memory
-const failedAttempts = new Map();
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 10 * 60 * 1000; // 10 minutes
-
-/**
- * Check if an account is currently locked.
- * @param {string} email
- * @returns {{locked: boolean, minutesRemaining: number}}
- */
-function checkAccountLock(email) {
-  const record = failedAttempts.get(email);
-  if (!record || record.attempts < MAX_FAILED_ATTEMPTS) {
-    return { locked: false, minutesRemaining: 0 };
-  }
-  const elapsed = Date.now() - record.lockedAt;
-  if (elapsed >= LOCKOUT_DURATION_MS) {
-    // Auto-unlock
-    failedAttempts.delete(email);
-    return { locked: false, minutesRemaining: 0 };
-  }
-  const minutesRemaining = Math.ceil((LOCKOUT_DURATION_MS - elapsed) / 60000);
-  return { locked: true, minutesRemaining };
-}
-
-/**
- * Record a failed login attempt.
- * @param {string} email
- */
-function recordFailedAttempt(email) {
-  const record = failedAttempts.get(email) || { attempts: 0, lockedAt: null };
-  record.attempts += 1;
-  if (record.attempts >= MAX_FAILED_ATTEMPTS) {
-    record.lockedAt = Date.now();
-  }
-  failedAttempts.set(email, record);
-}
-
-/**
- * Clear failed attempts after successful login.
- * @param {string} email
- */
-function clearFailedAttempts(email) {
-  failedAttempts.delete(email);
-}
+// ─── Account Lockout uses rateLimiter middleware ─────────────────────────────
+const { isAccountLocked, recordFailedAttempt: recordFailedLoginAttempt, clearFailedAttempts: clearLoginAttempts } = require('../middleware/rateLimiter');
 
 /**
  * Register a new user account.
@@ -111,8 +67,8 @@ async function register(name, email, password) {
  * @throws {AuthenticationError} If credentials are invalid (generic message)
  */
 async function login(email, password) {
-  // Check account lockout (Feature #7)
-  const lockStatus = checkAccountLock(email);
+  // Check account lockout
+  const lockStatus = isAccountLocked(email);
   if (lockStatus.locked) {
     throw new AuthenticationError(
       `Account locked. Try again in ${lockStatus.minutesRemaining} minute${lockStatus.minutesRemaining > 1 ? 's' : ''}.`
@@ -122,7 +78,7 @@ async function login(email, password) {
   // Find user by email
   const user = await userRepository.findByEmail(email);
   if (!user) {
-    recordFailedAttempt(email);
+    recordFailedLoginAttempt(email);
     throw new AuthenticationError('Incorrect email or password');
   }
 
@@ -134,17 +90,15 @@ async function login(email, password) {
   // Compare password with stored hash
   const isValid = await bcrypt.compare(password, user.password_hash);
   if (!isValid) {
-    recordFailedAttempt(email);
-    // Check if this attempt triggered lockout
-    const postCheck = checkAccountLock(email);
-    if (postCheck.locked) {
+    const result = recordFailedLoginAttempt(email);
+    if (result.locked) {
       throw new AuthenticationError('Account locked due to too many failed attempts. Try again in 10 minutes.');
     }
     throw new AuthenticationError('Incorrect email or password');
   }
 
   // Clear failed attempts on successful login
-  clearFailedAttempts(email);
+  clearLoginAttempts(email);
 
   // Generate tokens
   const accessToken = generateAccessToken(user.id);

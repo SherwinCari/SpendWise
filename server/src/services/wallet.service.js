@@ -172,6 +172,7 @@ async function transfer(userId, { sourceWalletId, destinationWalletId, amount })
 
 /**
  * Adjust wallet balance for a transaction (internal use).
+ * Uses SELECT FOR UPDATE to prevent race conditions.
  * For income: adds amount to balance.
  * For expense: subtracts amount from balance, rejects if result would be negative.
  * @param {string} walletId - The wallet ID to adjust
@@ -180,29 +181,46 @@ async function transfer(userId, { sourceWalletId, destinationWalletId, amount })
  * @returns {Promise<object>} The updated wallet
  */
 async function adjustBalance(walletId, amount, type) {
-  const wallet = await walletRepository.findById(walletId);
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
 
-  if (!wallet) {
-    throw new NotFoundError('Wallet not found');
-  }
+    // Lock the row to prevent concurrent modifications
+    const result = await client.query(
+      'SELECT id, balance FROM wallets WHERE id = $1 FOR UPDATE',
+      [walletId]
+    );
+    const wallet = result.rows[0];
 
-  const currentBalance = parseFloat(wallet.balance);
-  const adjustmentAmount = parseFloat(amount);
-  let newBalance;
-
-  if (type === 'income') {
-    newBalance = currentBalance + adjustmentAmount;
-  } else if (type === 'expense') {
-    newBalance = currentBalance - adjustmentAmount;
-    if (newBalance < 0) {
-      throw new InsufficientFundsError('Insufficient funds: wallet balance cannot be negative');
+    if (!wallet) {
+      throw new NotFoundError('Wallet not found');
     }
-  } else {
-    throw new ValidationError('Invalid transaction type. Must be "income" or "expense"');
-  }
 
-  const updated = await walletRepository.updateBalance(walletId, newBalance);
-  return updated;
+    const currentBalance = parseFloat(wallet.balance);
+    const adjustmentAmount = parseFloat(amount);
+    let newBalance;
+
+    if (type === 'income') {
+      newBalance = currentBalance + adjustmentAmount;
+    } else if (type === 'expense') {
+      newBalance = currentBalance - adjustmentAmount;
+      if (newBalance < 0) {
+        throw new InsufficientFundsError('Insufficient funds: wallet balance cannot be negative');
+      }
+    } else {
+      throw new ValidationError('Invalid transaction type. Must be "income" or "expense"');
+    }
+
+    await client.query('UPDATE wallets SET balance = $1 WHERE id = $2', [newBalance, walletId]);
+    await client.query('COMMIT');
+
+    return { id: walletId, balance: newBalance };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 module.exports = {

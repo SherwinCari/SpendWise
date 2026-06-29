@@ -293,8 +293,12 @@ router.post('/request-password-change', authenticate, authRateLimiter, async (re
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-    // Store code in memory
-    passwordChangeCodes.set(req.userId, { code, expiresAt, newPassword });
+    // Hash the new password now so we never store plaintext in memory
+    const rounds = Math.max(parseInt(process.env.BCRYPT_ROUNDS, 10) || 10, 10);
+    const newPasswordHash = await bcrypt.hash(newPassword, rounds);
+
+    // Store code and hashed password in memory
+    passwordChangeCodes.set(req.userId, { code, expiresAt, newPasswordHash });
 
     // Send email
     try {
@@ -320,12 +324,12 @@ router.post('/request-password-change', authenticate, authRateLimiter, async (re
  */
 router.post('/confirm-password-change', authenticate, authRateLimiter, async (req, res, next) => {
   try {
-    const { code, newPassword } = req.body;
+    const { code } = req.body;
 
-    if (!code || !newPassword) {
+    if (!code) {
       return res.status(400).json({
         success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Code and new password are required' },
+        error: { code: 'VALIDATION_ERROR', message: 'Verification code is required' },
       });
     }
 
@@ -352,11 +356,8 @@ router.post('/confirm-password-change', authenticate, authRateLimiter, async (re
       });
     }
 
-    // Hash new password and update
-    const rounds = Math.max(parseInt(process.env.BCRYPT_ROUNDS, 10) || 10, 10);
-    const passwordHash = await bcrypt.hash(newPassword, rounds);
-
-    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, req.userId]);
+    // Use the pre-hashed password (hashed at request time, never stored as plaintext)
+    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [record.newPasswordHash, req.userId]);
 
     // Record this password change against the daily limit
     recordPasswordChange(req.userId);

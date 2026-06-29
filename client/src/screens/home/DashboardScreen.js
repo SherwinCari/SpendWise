@@ -175,10 +175,11 @@ export default function DashboardScreen() {
         now.getFullYear(),
         now.getMonth() + 1
       );
-      const data = response.data?.summary || response.data || {};
+      // Server returns { success, year, month, totalIncome, totalExpenses, netBalance }
+      const data = response.data || {};
       setMonthlySummary({
-        totalIncome: data.totalIncome || data.total_income || '0',
-        totalExpenses: data.totalExpenses || data.total_expenses || '0',
+        totalIncome: data.totalIncome || '0',
+        totalExpenses: data.totalExpenses || '0',
       });
     } catch {
       // Silently fail — dashboard still shows other data
@@ -195,12 +196,8 @@ export default function DashboardScreen() {
     }
   }, []);
 
-  // Initial data load
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  // Initial data load and pull-to-refresh
+  const loadData = useCallback(async () => {
     setLoadError(null);
     try {
       await Promise.allSettled([
@@ -218,14 +215,18 @@ export default function DashboardScreen() {
     } finally {
       setInitialLoading(false);
     }
-  };
+  }, [fetchWallets, fetchTransactions, fetchBudgets, fetchNotifications, fetchMonthlySummary, fetchInsights]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Pull-to-refresh handler
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
-  }, []);
+  }, [loadData]);
 
   // Format currency amount using user preference
   const fmtCurrency = (amount) => formatCurrencyUtil(amount, currency);

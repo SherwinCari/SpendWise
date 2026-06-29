@@ -34,8 +34,8 @@ router.put('/:id/read', authenticate, async (req, res, next) => {
 
 /**
  * POST /api/notifications/monthly-summary
- * Generate a monthly summary notification (Feature #24).
- * Creates an in-app notification with the summary text.
+ * Generate a detailed monthly summary notification (Feature #24).
+ * Includes income, expenses, net balance, and top spending categories.
  */
 router.post('/monthly-summary', authenticate, async (req, res, next) => {
   try {
@@ -47,23 +47,37 @@ router.post('/monthly-summary', authenticate, async (req, res, next) => {
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
 
+    // Get monthly totals
     const summary = await analyticsService.getMonthlySummary(req.userId, year, month);
-    const totalIncome = parseFloat(summary.summary?.totalIncome || summary.summary?.total_income || 0);
-    const totalExpenses = parseFloat(summary.summary?.totalExpenses || summary.summary?.total_expenses || 0);
+    const totalIncome = parseFloat(summary.totalIncome || 0);
+    const totalExpenses = parseFloat(summary.totalExpenses || 0);
     const net = totalIncome - totalExpenses;
 
+    // Get top 3 spending categories for the month
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+    const breakdown = await analyticsService.getCategoryBreakdown(req.userId, startDate, endDate);
+    const topCategories = breakdown.slice(0, 3);
+
     const monthName = now.toLocaleString('default', { month: 'long' });
-    const message = `📊 ${monthName} ${year} Summary:\n` +
-      `Income: ₱${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n` +
-      `Expenses: ₱${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n` +
-      `Net: ${net >= 0 ? '+' : ''}₱${net.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    let message = `📊 ${monthName} ${year} Summary:\n` +
+      `💰 Income: ₱${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n` +
+      `💸 Expenses: ₱${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n` +
+      `${net >= 0 ? '📈' : '📉'} Net: ${net >= 0 ? '+' : ''}₱${net.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+    if (topCategories.length > 0) {
+      message += '\n\n🏷️ Top Spending:';
+      topCategories.forEach((cat, i) => {
+        message += `\n${i + 1}. ${cat.categoryName}: ₱${parseFloat(cat.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+      });
+    }
 
     // Create an in-app notification
     const id = uuidv4();
     await query(
       `INSERT INTO notifications (id, user_id, type, title, message, is_read)
        VALUES ($1, $2, 'monthly_summary', $3, $4, false)`,
-      [id, req.userId, `${monthName} Monthly Summary`, message]
+      [id, req.userId, `${monthName} ${year} Monthly Report`, message]
     );
 
     res.json({ success: true, data: { id, message } });
